@@ -21,6 +21,7 @@
 #include <immintrin.h> // for SIMD intrinsics
 #pragma comment(lib, "shlwapi.lib")
 
+
 int maxButtons = 9;
 int selectedbutton = -1;
 
@@ -35,7 +36,6 @@ POINT LockmPos;
 
 
 float literalscaler = 1.0f;
-float scaler = 1.0f;
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "uxtheme.lib")
@@ -53,11 +53,18 @@ int imgheight = 0;
 int width = 1024;
 int height = 576;
 
+
 int ilocX = 0;
 int ilocY = 0;
 
 int lockimgoffx;
 int lockimgoffy;
+
+int CoordLeft;
+int CoordTop;
+
+int CoordRight;
+int CoordBottom;
 
 void RedrawImageOnBitmap(HWND hwnd);
 
@@ -74,6 +81,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 #define GetMemoryLocation(start, x, y, widthfactor) \
 	((uint32_t*)(start) + ((y) * (widthfactor)) + (x))\
 \
+
+bool fullscreen = false;
+
+WINDOWPLACEMENT wpPrev;
 
 const char* encodeimage(const char* filepath) {
 
@@ -444,6 +455,7 @@ bool OpenImage(HWND hwnd, const char* fpath) {
 		int channels;
 		imgdata = stbi_load(fpath, &imgwidth, &imgheight, &channels, 4);
 
+
 		if (!imgdata) {
 			MessageBox(hwnd, "Unable to load primary image", "Unknown Error", MB_OK);
 			return false;
@@ -564,7 +576,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 				ilocX -= 1;
 				RedrawImageOnBitmap(hwnd);
 			}
-
+			/*
 			if (fabs(literalscaler - scaler) > 0.003f) {
 				scaler = fLerp(literalscaler, scaler, 0.9f);;
 				RedrawImageOnBitmap(hwnd);
@@ -572,6 +584,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 			else {
 				scaler = literalscaler;
 			}
+			*/
 
 		}
 
@@ -793,6 +806,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			offX += ilocX;
 			offY += ilocY;
 
+
 			int32_t ptx = (x-offX) * nscaler;
 			int32_t pty = (y-offY) * nscaler;
 
@@ -806,6 +820,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 				int alpha = (c >> 24) & 255;
 
 				*GetMemoryLocation(scrdata, x, y, width) = lerp(bkc, InvertColorChannels(c), ((float)alpha / 255.0f));
+
 			}
 			else {
 				if (paintBG) {
@@ -816,81 +831,103 @@ void RedrawImageOnBitmap(HWND hwnd) {
 		}
 	}
 
+
+	if (imgwidth > 1) {
+
+		CoordLeft = (width / 2) - (-ilocX)  - (int)(((float)(imgwidth / 2)) * literalscaler);
+		CoordTop = (height / 2)  - (-ilocY) - (int)(((float)(imgheight / 2)) * literalscaler) + (toolheight/2);
+
+		CoordRight = (width / 2) - (-ilocX) + (int)(((float)(imgwidth / 2)) * literalscaler);
+		CoordBottom = (height / 2) - (-ilocY) + (int)(((float)(imgheight / 2)) * literalscaler) + (toolheight / 2);
+
+	}
+
+
+	if (!fullscreen) {
+
+		// Render the toolbar
+
+		if (height < 150) return;
+
+		//BLUR FOR TOOLBAR
+		if ((GetKeyState('N') & 0x8000) && (GetKeyState('M') & 0x8000)) {
+
+			gaussian_blur((uint32_t*)scrdata, width, height, 4.0);
+		}
+		else if (CoordTop <= toolheight) {
+
+			gaussian_blur((uint32_t*)scrdata, width, toolheight, 4.0);
+		}
+		else {
+
+			for (uint32_t y = 0; y < toolheight; y++) {
+				for (uint32_t x = 0; x < width; x++) {
+					*GetMemoryLocation(scrdata, x, y, width) = 0x101010;
+				}
+			}
+		}
+
+
+		// TOOLBAR CONTAINER
+		for (uint32_t y = 0; y < toolheight; y++) {
+			for (uint32_t x = 0; x < width; x++) {
+				uint32_t color = 0x050505;
+				if (y == toolheight - 2) color = 0x303030;
+				if (y == toolheight - 1) color = 0x000000;
+
+				if (y == 0) color = 0x303030;
+				if (y == 1) color = 0x000000;
+				uint32_t* memoryPath = GetMemoryLocation(scrdata, x, y, width);
+				*memoryPath = lerp(*memoryPath, color, 0.8f); // transparency
+			}
+		}
+
+		// BUTTONS
+
+		int p = 5;
+		int k = 0;
+
+		if (!toolbarData) return;
+
+
+		for (int i = 0; i < maxButtons; i++) {
+			float bop = 0.7f; // button opacity
+			if (i == selectedbutton) bop = 1.0f;
+			for (uint32_t y = 0; y < iconSize; y++) {
+				for (uint32_t x = 0; x < iconSize; x++) {
+					uint32_t l = (*GetMemoryLocation(toolbarData, x + k, y, widthos));
+					float ll = (float)((l & 0x00FF0000) >> 16) / 255.0f;
+					uint32_t* memoryPath = GetMemoryLocation(scrdata, p + x, 6 + y, width);
+					*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * bop); // transparency
+				}
+			}
+			p += iconSize + 5; k += iconSize + 1;
+		}
+
+		if (selectedbutton >= 0 && selectedbutton < maxButtons) {
+
+			for (uint32_t y = 0; y < 1; y++) {
+				for (uint32_t x = 0; x < GetButtonInterval() - 2; x++) {
+					uint32_t* memoryPath = GetMemoryLocation(scrdata, x + 1 + (selectedbutton * GetButtonInterval() + 2), y + 4, width);
+					*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
+				}
+			}
+			for (uint32_t y = 0; y < toolheight - 10; y++) {
+				for (uint32_t x = 0; x < GetButtonInterval(); x++) {
+					uint32_t* memoryPath = GetMemoryLocation(scrdata, x + (selectedbutton * GetButtonInterval() + 2), y + 5, width);
+					*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
+				}
+			}
+			for (uint32_t y = 0; y < 1; y++) {
+				for (uint32_t x = 0; x < GetButtonInterval() - 2; x++) {
+					uint32_t* memoryPath = GetMemoryLocation(scrdata, x + 1 + (selectedbutton * GetButtonInterval() + 2), y + (toolheight - 5), width);
+					*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
+				}
+			}
+		}
+
+	}
 	
-
-
-	
-	// Render the toolbar
-
-	if (height < 150) return;
-
-	//BLUR FOR TOOLBAR
-	if ((GetKeyState('N') & 0x8000) && (GetKeyState('M') & 0x8000)) {
-
-		gaussian_blur((uint32_t*)scrdata, width, height, 4.0);
-	}
-	else {
-
-		gaussian_blur((uint32_t*)scrdata, width, toolheight, 4.0);
-	}
-
-	// TOOLBAR CONTAINER
-	for (uint32_t y = 0; y < toolheight; y++) {
-		for (uint32_t x = 0; x < width; x++) {
-			uint32_t color = 0x050505;
-			if (y == toolheight - 2) color = 0x303030;
-			if (y == toolheight - 1) color = 0x000000;
-
-			if (y == 0) color = 0x303030;
-			if (y == 1) color = 0x000000;
-			uint32_t* memoryPath = GetMemoryLocation(scrdata, x, y, width);
-			*memoryPath = lerp(*memoryPath, color, 0.8f); // transparency
-		}
-	}
-
-	// BUTTONS
-
-	int p = 5;
-	int k = 0;
-
-	if (!toolbarData) return;
-
-	float bop = 0.7f; // button opacity
-
-	for (int i = 0; i < maxButtons; i++) {
-		for (uint32_t y = 0; y < iconSize; y++) {
-			for (uint32_t x = 0; x < iconSize; x++) {
-				uint32_t l = (*GetMemoryLocation(toolbarData, x + k, y, widthos));
-				float ll = (float)((l & 0x00FF0000) >> 16)/255.0f;
-				uint32_t* memoryPath = GetMemoryLocation(scrdata, p + x, 6 + y, width);
-				*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll*bop); // transparency
-			}
-		}
-		p += iconSize + 5; k += iconSize + 1;
-	}
-
-	if (selectedbutton >= 0 && selectedbutton < maxButtons) {
-
-		for (uint32_t y = 0; y < 1; y++) {
-			for (uint32_t x = 0; x < GetButtonInterval()-2; x++) {
-				uint32_t* memoryPath = GetMemoryLocation(scrdata, x + 1 +(selectedbutton * GetButtonInterval() + 2), y + 4, width);
-				*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
-			}
-		}
-		for (uint32_t y = 0; y < toolheight-10; y++) {
-			for (uint32_t x = 0; x < GetButtonInterval(); x++) {
-				uint32_t* memoryPath = GetMemoryLocation(scrdata, x + (selectedbutton * GetButtonInterval() + 2), y + 5, width);
-				*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
-			}
-		}
-		for (uint32_t y = 0; y < 1; y++) {
-			for (uint32_t x = 0; x < GetButtonInterval()-2; x++) {
-				uint32_t* memoryPath = GetMemoryLocation(scrdata, x + 1 +(selectedbutton * GetButtonInterval() + 2), y + (toolheight-5), width);
-				*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
-			}
-		}
-	}
-
 	// Update window title
 
 	char str[256];
@@ -927,6 +964,13 @@ void PrepareOpenImage(HWND hwnd) {
 		OpenImage(hwnd, path);
 	}
 
+}
+
+int SaveImage() {
+
+	
+
+	return 0;
 }
 
 int SaveSFBB() {
@@ -982,25 +1026,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		BOOL enable = TRUE;
 		DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
 
-
 		break;
 	}
+
 	case WM_LBUTTONDOWN:
-	case WM_MBUTTONDOWN:
-	case WM_RBUTTONDOWN:{
-		lockimgoffx = ilocX;
-		lockimgoffy = ilocY;
-		GetCursorPos(&LockmPos);
-		POINT k;
-		GetCursorPos(&k);
-		ScreenToClient(hwnd, &k);
-		if (k.y > toolheight) {
-
-			mouseDown = true;
-		}
-		break;
-	}
-	case WM_LBUTTONUP: {
+	{
 		POINT m;
 		GetCursorPos(&m);
 		ScreenToClient(hwnd, &m);
@@ -1038,6 +1068,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			break;
 		case 7: {
 
+			
+
 			// delete
 			int result = MessageBox(NULL, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
 			if (result == IDYES) {
@@ -1059,22 +1091,64 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			break;
 		}
 	}
+	case WM_MBUTTONDOWN:
+	case WM_RBUTTONDOWN:{
+		lockimgoffx = ilocX;
+		lockimgoffy = ilocY;
+		GetCursorPos(&LockmPos);
+		POINT k;
+		GetCursorPos(&k);
+		ScreenToClient(hwnd, &k);
+		if (k.y > toolheight) {
+
+			mouseDown = true;
+		}
+		break;
+	}
+	case WM_LBUTTONUP: {
+	}
 	case WM_MBUTTONUP:
 	case WM_RBUTTONUP: {
 		mouseDown = false;
 		break;
+	}
+	case WM_MOUSELEAVE: {
 	}
 	case WM_MOUSEMOVE: {
 		POINT pos = { 0 };
 		GetCursorPos(&pos);
 		if (mouseDown) {
 
+			if (GetKeyState('G') & 0x8000) {
+				ScreenToClient(hwnd, &pos);
+				int k = (int)((float)(pos.x - CoordLeft) * (1.0f/literalscaler));
+				int v = (int)((float)(pos.y - CoordTop) * (1.0f / literalscaler));
+				
+					for (int y = 0; y < 30; y++) {
+						for (int x = 0; x < 30; x++) {
+							bool yes = pow(x - 15, 2) + pow(y - 15, 2) < pow(15, 2);
+							if (yes) {
+								uint32_t xloc = (x - 15) + k;
+								uint32_t yloc = (y - 15) + v;
+								if (xloc < imgwidth && yloc < imgheight && xloc >= 0 && yloc >= 0) {
+									*GetMemoryLocation(imgdata, xloc, yloc, imgwidth) = 0xFFFF0000;
+								}
+							}
+						}
+					}
+				
+				RedrawImageOnBitmap(hwnd);
+				break;
+			}
+			else {
 
-			ilocX = lockimgoffx -(LockmPos.x - pos.x);
-			ilocY = lockimgoffy -(LockmPos.y - pos.y);
+				ilocX = lockimgoffx - (LockmPos.x - pos.x);
+				ilocY = lockimgoffy - (LockmPos.y - pos.y);
+			}
 
 			RedrawImageOnBitmap(hwnd);
 		}
+
 		ScreenToClient(hwnd, &pos);
 		if (pos.y <= toolheight) {
 			lock = true;
@@ -1108,6 +1182,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		HWND temp = GetActiveWindow();
 		if (temp != hwnd) {
 			return 0;
+		}
+		if (wparam == VK_F11) {
+			if (fullscreen) {
+				// disable fullscreen
+				SetWindowLong(hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+				SetWindowPlacement(hwnd, &wpPrev);
+				SetWindowPos(hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+				fullscreen = false;
+				RedrawImageOnBitmap(hwnd);
+			}
+			else {
+				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+				int screenX = GetSystemMetrics(SM_CXSCREEN);
+				int screenY = GetSystemMetrics(SM_CYSCREEN);
+				GetWindowPlacement(hwnd, &wpPrev);
+				SetWindowPos(hwnd, 0, 0, 0, screenX, screenY, 0);
+				fullscreen = true;
+				RedrawImageOnBitmap(hwnd);
+			}
 		}
 		if (wparam == VK_RIGHT) {
 			/*
@@ -1160,8 +1254,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		if (wparam == '8') {
 			literalscaler = 8.0f;
 		}
-
-
+		RedrawImageOnBitmap(hwnd);
 		break;
 	}
 	case WM_SIZE: {
@@ -1186,7 +1279,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 		float v = 1;
 
-		if (zDelta > 0 && literalscaler < 100.0f) {
+		if (zDelta > 0 && literalscaler < 400.0f) {
 			v = 1.25f;
 		}
 		else if(literalscaler > 0.01f){
