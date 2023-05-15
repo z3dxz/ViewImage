@@ -329,7 +329,7 @@ unsigned char* LoadImageFromResource(int resourceId, int& width, int& height, in
 	const size_t resourceSize = SizeofResource(hModule, hResource);
 
 	// Load the image data from the resource data
-	unsigned char* imageData = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(resourceData), resourceSize, &width, &height, &channels, 0);
+	unsigned char* imageData = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(resourceData), resourceSize, &width, &height, &channels, 4);
 
 	if (!imageData)
 	{
@@ -622,14 +622,27 @@ const char* FileOpenDialog(HWND hwnd) {
 	return 0;
 }
 
-uint32_t lerp(uint32_t c0, uint32_t c1, float amount) {
-	uint8_t r1 = (c0 >> 16) & 0xff;
-	uint8_t r2 = (c1 >> 16) & 0xff;
-	uint8_t g1 = (c0 >> 8) & 0xff;
-	uint8_t g2 = (c1 >> 8) & 0xff;
-	uint8_t b1 = c0 & 0xff;
-	uint8_t b2 = c1 & 0xff;
-	return (uint32_t)((r2 - r1) * amount + r1) << 16 | (uint32_t)((g2 - g1) * amount + g1) << 8 | (uint32_t)((b2 - b1) * amount + b1);
+uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
+{
+	// Extract the individual color channels from the input values
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+
+	// Calculate the lerped color values for each channel
+	uint8_t a = (1 - alpha) * a1 + alpha * a2;
+	uint8_t r = (1 - alpha) * r1 + alpha * r2;
+	uint8_t g = (1 - alpha) * g1 + alpha * g2;
+	uint8_t b = (1 - alpha) * b1 + alpha * b2;
+
+	// Combine the lerped color channels into a single 32-bit value
+	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
 
@@ -1039,33 +1052,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		case 0:
 			// open
 			PrepareOpenImage(hwnd);
-			break;
+			return 0;
 		case 1:
 			// save
 			if (!SaveSFBB()) {
 				return 0;
 			}
-			break;
+			return 0;
 		case 2:
 			// zoom in
 			NewZoom(hwnd, 1.25f, false);
-			break;
+			return 0;
 		case 3:
 			// zoom out
 			NewZoom(hwnd, 0.8f, false);
-			break;
+			return 0;
 		case 4:
 			// zoom fit
 			autozoom(hwnd);
-			break;
+			return 0;
 		case 5:
 			// zoom original
 			literalscaler = 1.0f;
-			break;
+			return 0;
 		case 6:
 			// rotate
 			MessageBox(NULL, "I haven't added this feature yet", "Can't rotate image", MB_OK);
-			break;
+			return 0;
 		case 7: {
 
 			
@@ -1083,12 +1096,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 				// Terminate the current instance of the application
 				ExitProcess(0);
 			}
-			break;
+			return 0;
 		}
 		case 8:
 			// info
 			MessageBox(NULL, filepath, "Image Info", MB_OK);
-			break;
+			return 0;
 		}
 	}
 	case WM_MBUTTONDOWN:
@@ -1126,12 +1139,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 				
 					for (int y = 0; y < 30; y++) {
 						for (int x = 0; x < 30; x++) {
-							bool yes = pow(x - 15, 2) + pow(y - 15, 2) < pow(15, 2);
-							if (yes) {
+							double yes = pow(x - 15, 2) + pow(y - 15, 2);
+							if (yes <= pow(15, 2)) {
+
 								uint32_t xloc = (x - 15) + k;
 								uint32_t yloc = (y - 15) + v;
 								if (xloc < imgwidth && yloc < imgheight && xloc >= 0 && yloc >= 0) {
-									*GetMemoryLocation(imgdata, xloc, yloc, imgwidth) = 0xFFFF0000;
+									uint32_t* memoryPath = GetMemoryLocation(imgdata, xloc, yloc, imgwidth);
+									*memoryPath = lerp(0xFFFF0000, *memoryPath, yes/pow(15,2)); // transparency
 								}
 							}
 						}

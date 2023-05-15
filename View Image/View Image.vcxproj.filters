@@ -39,5 +39,8 @@
     <Image Include="txt_atlas.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="iconbar.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
