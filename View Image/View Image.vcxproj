@@ -131,7 +131,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
+    <ClInclude Include="src\font.h" />
     <ClInclude Include="src\stb_image.h" />
+    <ClInclude Include="src\stb_image_write.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="View Image.rc" />

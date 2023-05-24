@@ -1,5 +1,7 @@
+// font: https://github.com/dhepper/font8x8
 #define toolheight 43
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <shlwapi.h>
@@ -16,8 +18,10 @@
 #include <string>
 #include <stdint.h>
 #include <stdbool.h>
+#include "font.h"
 #include "../resource.h"
 #include "stb_image.h"
+#include "stb_image_write.h"
 #include <immintrin.h> // for SIMD intrinsics
 #pragma comment(lib, "shlwapi.lib")
 
@@ -35,7 +39,7 @@ bool mouseDown = false;
 POINT LockmPos;
 
 
-float literalscaler = 1.0f;
+float mscaler = 1.0f;
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "uxtheme.lib")
@@ -86,36 +90,37 @@ bool fullscreen = false;
 
 WINDOWPLACEMENT wpPrev;
 
-const char* encodeimage(const char* filepath) {
+uint32_t InvertColorChannelsInverse(uint32_t d) {
+	if (standardFomat) return d; 
+	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
+}
 
-	printf("\n -- Converting File -- \n");
+uint32_t InvertColorChannels(uint32_t d) {
+	if (!standardFomat) return d;
+	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
+}
 
-	int imgwidth;
-	int imgheight;
-	int channels;
-	void* imgdata = stbi_load(filepath, &imgwidth, &imgheight, &channels, 4);
+bool encodesfbbfile(void* idd, uint32_t iw, uint32_t ih, const char* filepath) {
 
-	if (!imgdata) {
-		return "sorry, file is not a bitmap or failed to load for some reason";
-	}
-
-
-	int imgByteSize = (imgwidth * imgheight * 4) + 2;
+	int imgByteSize = (iw * ih * 4) + 2;
 
 	void* data = malloc(imgByteSize);
 
 	if (!data) {
-		return "sorry, no image data";
-	}
+		//no img data
+		return false;
+	} 
 
-	if (imgwidth > 65536 || imgheight > 65536) {
-		return "sorry, image width or height is too big";
+	if (iw > 65536 || ih > 65536) {
+		// image width or height too big
+		return false;
+		//return "sorry, image width or height is too big";
 	}
 
 
 	wchar_t* ptr_ = (wchar_t*)data;
 
-	*ptr_ = imgwidth;
+	*ptr_ = iw;
 
 	byte* ptr = (byte*)data;
 	ptr += 2;
@@ -128,35 +133,35 @@ const char* encodeimage(const char* filepath) {
 	//ptr += 4;
 
 
-	for (int y = 0; y < imgheight; y++) {
-		for (int x = 0; x < imgwidth; x++) {
-			INT8 pix = (*GetMemoryLocation(imgdata, x, y, imgwidth));
+	for (int y = 0; y < ih; y++) {
+		for (int x = 0; x < iw; x++) {
+			INT8 pix = (*GetMemoryLocation(idd, x, y, iw));
 			*ptr = pix;
 			ptr++;
 		}
 	}
 
 
-	for (int y = 0; y < imgheight; y++) {
-		for (int x = 0; x < imgwidth; x++) {
-			INT8 pix = (*GetMemoryLocation(imgdata, x, y, imgwidth)) >> 8;
+	for (int y = 0; y < ih; y++) {
+		for (int x = 0; x < iw; x++) {
+			INT8 pix = (*GetMemoryLocation(idd, x, y, iw)) >> 8;
 			*ptr = pix;
 			ptr++;
 		}
 	}
 
 
-	for (int y = 0; y < imgheight; y++) {
-		for (int x = 0; x < imgwidth; x++) {
-			INT8 pix = (*GetMemoryLocation(imgdata, x, y, imgwidth)) >> 16;
+	for (int y = 0; y < ih; y++) {
+		for (int x = 0; x < iw; x++) {
+			INT8 pix = (*GetMemoryLocation(idd, x, y, iw)) >> 16;
 			*ptr = pix;
 			ptr++;
 		}
 	}
 
-	for (int y = 0; y < imgheight; y++) {
-		for (int x = 0; x < imgwidth; x++) {
-			INT8 pix = (*GetMemoryLocation(imgdata, x, y, imgwidth)) >> 24;
+	for (int y = 0; y < ih; y++) {
+		for (int x = 0; x < iw; x++) {
+			INT8 pix = (*GetMemoryLocation(idd, x, y, iw)) >> 24;
 			*ptr = pix;
 			ptr++;
 		}
@@ -178,9 +183,9 @@ const char* encodeimage(const char* filepath) {
 	HANDLE hFile = CreateFile(
 		str_path,     // Filename
 		GENERIC_WRITE,          // Desired access
-		FILE_SHARE_READ,        // Share mode
+		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,        // Share mode
 		NULL,                   // Security attributes
-		CREATE_ALWAYS,             // Creates a new file, only if it doesn't already exist
+		CREATE_ALWAYS,            
 		FILE_ATTRIBUTE_NORMAL,  // Flags and attributes
 		NULL);                  // Template file handle
 
@@ -204,17 +209,36 @@ const char* encodeimage(const char* filepath) {
 	// Close the handle once we don't need it.
 	CloseHandle(hFile);
 
-	free(imgdata);
 	free(data);
 
+	return true;
+}
 
-	return 0;
+bool encodeimage(const char* filepath) {
+
+	printf("\n -- Converting File -- \n");
+
+	int imgwidth;
+	int imgheight;
+	int channels;
+	void* imgdata2 = stbi_load(filepath, &imgwidth, &imgheight, &channels, 4);
+
+	if (!imgdata2) {
+		return "sorry, file is not a bitmap or failed to load for some reason";
+	}
+
+	bool l = encodesfbbfile(imgdata2, imgwidth, imgheight, filepath);
+
+	free(imgdata2);
+
+	return l;
 
 }
 
 void* decodesfbb(const char* filepath, int* imgwidth, int* imgheight) {
 	printf("\n -- Reading File -- \n");
-	HANDLE hFile = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+	
+	HANDLE hFile = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
 
 	if (hFile == INVALID_HANDLE_VALUE) {
 		printf("sorry, the handle value was invalid");
@@ -362,7 +386,7 @@ std::string GetNextFilePath(const char* file_Path) {
 			{
 				std::string fileName = fileData.cFileName;
 				std::string extension = fileName.substr(fileName.find_last_of(".") + 1);
-				if (extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "bmp" || extension == "gif")
+				if (extension == "sfbb" || extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "bmp" || extension == "gif")
 				{
 					if (foundCurrentFile)
 					{
@@ -385,7 +409,7 @@ std::string GetNextFilePath(const char* file_Path) {
 
 		FindClose(hFind);
 	}
-
+	return "No";
 }
 
 void no_offset(HWND hwnd) {
@@ -411,9 +435,9 @@ void autozoom(HWND hwnd) {
 
 	float fzoom = e * 0.9f;
 	// round to the nearest power of 1.25 (for easy zooming back to 100)
-	literalscaler = pow(1.25f, round(log_base_1_25(fzoom)));
+	mscaler = pow(1.25f, round(log_base_1_25(fzoom)));
 
-	if (literalscaler > 1.0f && imgheight > 5) literalscaler = 1.0f;
+	if (mscaler > 1.0f && imgheight > 5) mscaler = 1.0f;
 
 	RedrawImageOnBitmap(hwnd);
 }
@@ -434,38 +458,50 @@ bool isFile(const char* str, const char* suffix) {
 
 const int iconSize = 30; // 50px
 
-bool OpenImage(HWND hwnd, const char* fpath) {
-	strcpy(filepath, fpath);
+int channels;
+void* getImgData(HWND hwnd, const char* fpath, int* w, int* h, int* c, bool* sf) {
+	void* id;
 
-	standardFomat = true;
+	*sf = true;
 
 	if (isFile(fpath, ".sfbb")) {
 
-		standardFomat = false;
+		*sf = false;
+		id = decodesfbb(fpath, w, h);
+		*c = 4;
 
-		imgdata = decodesfbb(fpath, &imgwidth, &imgheight);
 
-		if (!imgdata) {
+		if (!id) {
 			MessageBox(hwnd, "Unable to load SFBB image", "Unknown Error", MB_OK);
-			return false;
+			return 0;
 		}
 	}
-	else if(isFile(fpath, ".jpeg") || isFile(fpath, ".jpg") || isFile(fpath, ".png") || isFile(fpath, ".tga") || isFile(fpath, ".bmp") || isFile(fpath, ".psd") || isFile(fpath, ".gif") || isFile(fpath, ".hdr") || isFile(fpath, ".pic") || isFile(fpath, ".pmn")) {
 
-		int channels;
-		imgdata = stbi_load(fpath, &imgwidth, &imgheight, &channels, 4);
+	else if (isFile(fpath, ".jpeg") || isFile(fpath, ".jpg") || isFile(fpath, ".png") || isFile(fpath, ".tga") || isFile(fpath, ".bmp") || isFile(fpath, ".psd") || isFile(fpath, ".gif") || isFile(fpath, ".hdr") || isFile(fpath, ".pic") || isFile(fpath, ".pmn")) {
+
+		id = stbi_load(fpath, w, h, &channels, 4);
 
 
-		if (!imgdata) {
+		if (!id) {
 			MessageBox(hwnd, "Unable to load primary image", "Unknown Error", MB_OK);
-			return false;
+			return 0;
 		}
 	}
 	else {
 		MessageBox(hwnd, "File type not supported", "Unsupported", MB_OK);
+		return 0;
+	}
+	return id;
+}
+
+bool OpenImage(HWND hwnd, const char* fpath) {
+	strcpy(filepath, fpath);
+
+	imgdata = getImgData(hwnd, fpath, &imgwidth, &imgheight, &channels, &standardFomat);
+	if (!imgdata) {
+		MessageBox(hwnd, "Error Loading Image", "Error", MB_OK);
 		return false;
 	}
-	
 
 	// Auto-zoom
 	autozoom(hwnd);
@@ -475,6 +511,60 @@ bool OpenImage(HWND hwnd, const char* fpath) {
 	RedrawImageOnBitmap(hwnd);
 	return true;
 }
+
+
+void rotateImage90Degrees(HWND hwnd, const std::string& inputPath) {
+	// Load the image using stb_image
+	int width, height;
+	int channels = 4;
+	int channels0;
+	bool sf;
+	unsigned char* image = (unsigned char*)getImgData(hwnd, inputPath.c_str(), &width, &height, &channels0, &sf);
+
+
+	if (!image) {
+		std::cerr << "Failed to load image." << std::endl;
+		return;
+	}
+
+	// Create a new buffer for the rotated image
+	unsigned char* rotatedImage = new unsigned char[width * height * channels];
+
+	// Rotate the image 90 degrees clockwise
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			int rotatedX = height - y - 1;
+			int rotatedY = x;
+			for (int c = 0; c < channels; ++c) {
+				int ck = c;
+				if (!sf) {
+					// inverse channels
+					if (c == 0) ck = 2;
+					if (c == 2) ck = 0;
+				}
+				rotatedImage[(rotatedY * height + rotatedX) * channels + c] = image[(y * width + x) * channels + ck];
+			}
+		}
+	}
+	// Save the rotated image using stb_image_write
+	if (sf) {
+		if (!stbi_write_png(inputPath.c_str(), height, width, channels, rotatedImage, 0)) {
+			MessageBox(hwnd, "Failed to save rotated Standard image.", "Error", MB_OK);
+		}
+	}
+	else {
+		if (!encodesfbbfile(rotatedImage, height, width, inputPath.c_str())) {
+			MessageBox(hwnd, "Failed to save rotated SFBB image.", "Error", MB_OK);
+		}
+	}
+
+	// Clean up memory
+	free(image);
+	delete[] rotatedImage;
+
+	std::cout << "Image rotated and saved successfully." << std::endl;
+}
+
 
 void PrepareOpenImage(HWND hwnd);
 
@@ -494,7 +584,7 @@ int GetButtonInterval() {
 int getXbuttonID(POINT mPos) {
 	LONG x = mPos.x;
 	int interval = GetButtonInterval();
-	return mPos.y > toolheight ? -1 : x / interval;
+	return (mPos.y > toolheight || mPos.y < 2 || mPos.x < 2) ? -1 : x / interval;
 }
 
 //********************************************
@@ -561,28 +651,28 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		if (temp == hwnd) {
 
 			if (GetKeyState('W') & 0x8000) {
-				ilocY += 1;
+				ilocY += 3;
 				RedrawImageOnBitmap(hwnd);
 			}
 			if (GetKeyState('A') & 0x8000) {
-				ilocX += 1;
+				ilocX += 3;
 				RedrawImageOnBitmap(hwnd);
 			}
 			if (GetKeyState('S') & 0x8000) {
-				ilocY -= 1;
+				ilocY -= 3;
 				RedrawImageOnBitmap(hwnd);
 			}
 			if (GetKeyState('D') & 0x8000) {
-				ilocX -= 1;
+				ilocX -= 3;
 				RedrawImageOnBitmap(hwnd);
 			}
 			/*
-			if (fabs(literalscaler - scaler) > 0.003f) {
-				scaler = fLerp(literalscaler, scaler, 0.9f);;
+			if (fabs(mscaler - scaler) > 0.003f) {
+				scaler = fLerp(mscaler, scaler, 0.9f);;
 				RedrawImageOnBitmap(hwnd);
 			}
 			else {
-				scaler = literalscaler;
+				scaler = mscaler;
 			}
 			*/
 
@@ -646,10 +736,6 @@ uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 }
 
 
-uint32_t InvertColorChannels(uint32_t d) {
-	if (!standardFomat) return d;
-	return RGB((((d) >> 16) & 0xFF), (((d) >> 8) & 0xFF), (((d)) & 0xFF));
-}
 // Gaussian function
 double gaussian(double x, double sigma) {
 	return exp(-(x * x) / (2 * sigma * sigma)) / (sqrt(2 * 3.14159265) * sigma);
@@ -657,7 +743,7 @@ double gaussian(double x, double sigma) {
 
 
 // Gaussian blur function
-void gaussian_blur(uint32_t* pixels, int width, int height, double sigma) {
+void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t offX = 0, uint32_t offY = 0) {
 	// Compute kernel size
 	int kernel_size = (int)ceil(sigma * 3) * 2 + 1;
 
@@ -683,14 +769,14 @@ void gaussian_blur(uint32_t* pixels, int width, int height, double sigma) {
 
 	// Blur horizontally
 	int x, y;
-	for (y = 0; y < height; y++) {
-		for (x = 0; x < width; x++) {
+	for (y = 0; y < lH; y++) {
+		for (x = 0; x < lW; x++) {
 			int k;
 			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0;
 			for (k = 0; k < kernel_size; k++) {
 				int xk = x - (kernel_size - 1) / 2 + k;
 				if (xk >= 0 && xk < width) {
-					uint32_t pixel = pixels[y * width + xk];
+					uint32_t pixel = pixels[(y+offY) * width + (xk+offX)];
 					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
 					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
 					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
@@ -701,20 +787,20 @@ void gaussian_blur(uint32_t* pixels, int width, int height, double sigma) {
 				((uint32_t)(sum_b + 0.5));
 		}
 		// Copy row back into pixels array
-		for (x = 0; x < width; x++) {
-			pixels[y * width + x] = row[x];
+		for (x = 0; x < lW; x++) {
+			pixels[(y+offY) * width + (x+offX)] = row[x];
 		}
 	}
 
 	// Blur vertically
-	for (x = 0; x < width; x++) {
-		for (y = 0; y < height; y++) {
+	for (x = 0; x < lW; x++) {
+		for (y = 0; y < lH; y++) {
 			int k;
 			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0;
 			for (k = 0; k < kernel_size; k++) {
 				int yk = y - (kernel_size - 1) / 2 + k;
-				if (yk >= 0 && yk < height) {
-					uint32_t pixel = pixels[yk * width + x];
+				if (yk >= 0 && yk < lH) {
+					uint32_t pixel = pixels[(yk+offY) * width + (x+offX)];
 					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
 					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
 					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
@@ -725,8 +811,8 @@ void gaussian_blur(uint32_t* pixels, int width, int height, double sigma) {
 				((uint32_t)(sum_b + 0.5));
 		}
 		// Copy row back into pixels array
-		for (y = 0; y < height; y++) {
-			pixels[y * width + x] = row[y];
+		for (y = 0; y < lH; y++) {
+			pixels[(offY+y) * width + (offX+x)] = row[y];
 		}
 	}
 
@@ -785,6 +871,30 @@ uint32_t* bilinear_scale(const uint32_t* input_buffer, const int input_width, co
 }
 
 
+void render(char* bitmap, uint32_t locX, uint32_t locY, uint32_t color) {
+	int set;
+	int mask;
+	for (int y = 0; y < 8; y++) {
+		for (int x = 0; x < 8; x++) {
+			set = bitmap[y] & 1 << x;
+			if (set) {
+				*GetMemoryLocation(scrdata, locX + x, locY + y, width) = color;
+			}
+		}
+	}
+}
+
+void RenderString(const char* input, uint32_t locX, uint32_t locY, uint32_t color) {
+	for (int i = 0; i < strlen(input); i++) {
+		render(font8x8_basic[input[i]], locX+(8*i), locY, color);
+	}
+}
+
+char* GetRenderCharacters(char e) {
+	return font8x8_basic[e];
+}
+
+
 //*********************************************
 void RedrawImageOnBitmap(HWND hwnd) {
 
@@ -811,10 +921,10 @@ void RedrawImageOnBitmap(HWND hwnd) {
 				bkc = 0x0C0C0C;
 			}
 
-			float nscaler = 1.0f / literalscaler;
+			float nscaler = 1.0f / mscaler;
 
-			int32_t offX = (((int32_t)width - (int32_t)(imgwidth * literalscaler)) / 2);
-			int32_t offY = (((int32_t)height + toolheight - (int32_t)(imgheight * literalscaler)) / 2);
+			int32_t offX = (((int32_t)width - (int32_t)(imgwidth * mscaler)) / 2);
+			int32_t offY = (((int32_t)height + toolheight - (int32_t)(imgheight * mscaler)) / 2);
 
 			offX += ilocX;
 			offY += ilocY;
@@ -827,9 +937,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			int margin = 2;
 			if (ptx < imgwidth && pty < imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < height - margin && x < width - margin) {
 				uint32_t c = *GetMemoryLocation(imgdata, ptx, pty, imgwidth);
-				int blue = c & 255;
-				int green = (c >> 8) & 25;
-				int red = (c >> 16) & 255;
+
 				int alpha = (c >> 24) & 255;
 
 				*GetMemoryLocation(scrdata, x, y, width) = lerp(bkc, InvertColorChannels(c), ((float)alpha / 255.0f));
@@ -847,35 +955,37 @@ void RedrawImageOnBitmap(HWND hwnd) {
 
 	if (imgwidth > 1) {
 
-		CoordLeft = (width / 2) - (-ilocX)  - (int)(((float)(imgwidth / 2)) * literalscaler);
-		CoordTop = (height / 2)  - (-ilocY) - (int)(((float)(imgheight / 2)) * literalscaler) + (toolheight/2);
+		CoordLeft = (width / 2) - (-ilocX)  - (int)(((float)(imgwidth / 2)) * mscaler);
+		CoordTop = (height / 2)  - (-ilocY) - (int)(((float)(imgheight / 2)) * mscaler) + (toolheight/2);
 
-		CoordRight = (width / 2) - (-ilocX) + (int)(((float)(imgwidth / 2)) * literalscaler);
-		CoordBottom = (height / 2) - (-ilocY) + (int)(((float)(imgheight / 2)) * literalscaler) + (toolheight / 2);
+		CoordRight = (width / 2) - (-ilocX) + (int)(((float)(imgwidth / 2)) * mscaler);
+		CoordBottom = (height / 2) - (-ilocY) + (int)(((float)(imgheight / 2)) * mscaler) + (toolheight / 2);
 
 	}
 
+	POINT p;
+	GetCursorPos(&p);
+	ScreenToClient(hwnd, &p);
 
-	if (!fullscreen) {
+	if ((!fullscreen && height >= 250) || p.y < toolheight) {
 
 		// Render the toolbar
 
-		if (height < 150) return;
 
 		//BLUR FOR TOOLBAR
 		if ((GetKeyState('N') & 0x8000) && (GetKeyState('M') & 0x8000)) {
 
-			gaussian_blur((uint32_t*)scrdata, width, height, 4.0);
+			gaussian_blur((uint32_t*)scrdata, width, height, 4.0, width);
 		}
 		else if (CoordTop <= toolheight) {
 
-			gaussian_blur((uint32_t*)scrdata, width, toolheight, 4.0);
+			gaussian_blur((uint32_t*)scrdata, width, toolheight, 4.0, width);
 		}
 		else {
 
 			for (uint32_t y = 0; y < toolheight; y++) {
 				for (uint32_t x = 0; x < width; x++) {
-					*GetMemoryLocation(scrdata, x, y, width) = 0x101010;
+					*GetMemoryLocation(scrdata, x, y, width) = 0x111111;
 				}
 			}
 		}
@@ -904,41 +1014,92 @@ void RedrawImageOnBitmap(HWND hwnd) {
 
 
 		for (int i = 0; i < maxButtons; i++) {
-			float bop = 0.7f; // button opacity
-			if (i == selectedbutton) bop = 1.0f;
+			if ((p) > (width - (iconSize))) continue;
 			for (uint32_t y = 0; y < iconSize; y++) {
 				for (uint32_t x = 0; x < iconSize; x++) {
+
+
 					uint32_t l = (*GetMemoryLocation(toolbarData, x + k, y, widthos));
 					float ll = (float)((l & 0x00FF0000) >> 16) / 255.0f;
-					uint32_t* memoryPath = GetMemoryLocation(scrdata, p + x, 6 + y, width);
-					*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * bop); // transparency
+					uint32_t* memoryPath = GetMemoryLocation(scrdata, p + x, 6 + y, width); \
+					if (i != selectedbutton) {
+						*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * 0.7f); // transparency
+					}
+					else {
+						*memoryPath = lerp(*memoryPath, 0xFFE0E0, ll * 1.0f); // transparency
+					}
 				}
 			}
 			p += iconSize + 5; k += iconSize + 1;
 		}
 
 		if (selectedbutton >= 0 && selectedbutton < maxButtons) {
+			// rounded corners: split hover thing into three things
+			
 
 			for (uint32_t y = 0; y < 1; y++) {
 				for (uint32_t x = 0; x < GetButtonInterval() - 2; x++) {
 					uint32_t* memoryPath = GetMemoryLocation(scrdata, x + 1 + (selectedbutton * GetButtonInterval() + 2), y + 4, width);
-					*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
+					*memoryPath = lerp(*memoryPath, 0xFF8080, 0.2f);
 				}
 			}
 			for (uint32_t y = 0; y < toolheight - 10; y++) {
 				for (uint32_t x = 0; x < GetButtonInterval(); x++) {
 					uint32_t* memoryPath = GetMemoryLocation(scrdata, x + (selectedbutton * GetButtonInterval() + 2), y + 5, width);
-					*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
+					*memoryPath = lerp(*memoryPath, 0xFF8080, 0.2f);
 				}
 			}
 			for (uint32_t y = 0; y < 1; y++) {
 				for (uint32_t x = 0; x < GetButtonInterval() - 2; x++) {
 					uint32_t* memoryPath = GetMemoryLocation(scrdata, x + 1 + (selectedbutton * GetButtonInterval() + 2), y + (toolheight - 5), width);
-					*memoryPath = lerp(*memoryPath, 0xFFFFFF, 0.2f);
+					*memoryPath = lerp(*memoryPath, 0xFF8080, 0.2f);
 				}
 			}
-		}
 
+			std::string txt = "M";
+			switch(selectedbutton){
+				case 0:
+					// open
+					txt = "Open";
+					break;
+				case 1:
+					// save
+					txt = "Save as SFBB";
+					break;
+				case 2:
+					// zoom in
+					txt = "Zoom In";
+					break;
+				case 3:
+					// zoom out
+					txt = "Zoom Out";
+					break;
+				case 4:
+					// zoom fit
+					txt = "Zoom Auto";
+					break;
+				case 5:
+					// zoom original
+					txt = "Zoom 1:1 (100%)";
+					break;
+				case 6:
+					// rotate
+					txt = "Rotate and save image";
+					break;
+				case 7:
+					// delete
+					txt = "DELETE image";
+					break;
+				case 8:
+					// info
+					txt = "Image Info";
+					break;
+			}
+			int loc = 1 + (selectedbutton * GetButtonInterval() + 2);
+			//gaussian_blur((uint32_t*)scrdata, 40, 40, 2.0f, loc+5, toolheight+6)
+			gaussian_blur((uint32_t*)scrdata, (txt.length() * 8)+10, 18, 16.0f, width, loc, toolheight+5);
+			RenderString(txt.c_str(), loc + 5, toolheight + 10, 0xFFFFFF);
+		}
 	}
 	
 	// Update window title
@@ -946,7 +1107,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 	char str[256];
 	if (!cpath.empty()) {
 
-		sprintf(str, "View Image | %s | %d\%%", cpath.c_str(), (int)(literalscaler * 100.0f));
+		sprintf(str, "View Image | %s | %d\%%", cpath.c_str(), (int)(mscaler * 100.0f));
 	}
 	else {
 
@@ -986,35 +1147,40 @@ int SaveImage() {
 	return 0;
 }
 
-int SaveSFBB() {
+int SaveSFBB(HWND hwnd) {
 
-	int s = MessageBox(0, "Do you want to save this file as an SFBB? File will be saved in the current directory.", "Convert to SFBB?", MB_YESNO);
+	int s = MessageBox(hwnd, "Do you want to save this file as an SFBB? File will be saved in the current directory.", "Convert to SFBB?", MB_YESNO);
 	if (s == IDYES) {
 		if (imgwidth == 0) {
-			MessageBox(0, "There is no image open", "No image", MB_OK);
+			MessageBox(hwnd, "There is no image open", "No image", MB_OK);
 			return 0;
 		}
 		if (!standardFomat) {
-			MessageBox(0, "Image is not in a standard format or already in SFBB format.", "Already in SFBB Format", MB_OK);
+			MessageBox(hwnd, "Image is not in a standard format or already in SFBB format.", "Already in SFBB Format", MB_OK);
 			return 0;
 		}
-		const char* w = encodeimage(filepath);
-		if (w == 0) {
-			MessageBox(0, "Saved", "Saved", MB_OK);
+		bool w = encodeimage(filepath);
+		if (w) {
+			MessageBox(hwnd, "Saved", "Saved", MB_OK);
 		}
 		else {
-			MessageBox(0, w, "Save Failed", MB_OK);
+			MessageBox(hwnd, "Save Failed", "Save Failed", MB_OK);
 		}
 	}
 	return 1;
 }
 
-void NewZoom(HWND hwnd, float v, bool mouse) {
+void NewZoom(HWND hwnd, float v, int mouse) {
 	POINT p;
 	GetCursorPos(&p);
 	ScreenToClient(hwnd, &p);
 	p.x -= width / 2;
 	p.y -= height / 2;
+
+	if (mouse == 2) {
+		p.x = 0;
+		p.y = 0;
+	}
 
 	int distance_x = ilocX - p.x;
 	int distance_y = ilocY - p.y;
@@ -1025,7 +1191,7 @@ void NewZoom(HWND hwnd, float v, bool mouse) {
 		ilocX = p.x + distance_x * v;
 		ilocY = p.y + distance_y * v;
 	}
-	literalscaler *= v;
+	mscaler *= v;
 
 	RedrawImageOnBitmap(hwnd);
 }
@@ -1041,7 +1207,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 		break;
 	}
-
+	case WM_GETMINMAXINFO:
+	{
+		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lparam;
+		lpMMI->ptMinTrackSize.x = 340;
+		lpMMI->ptMinTrackSize.y = toolheight+70;
+		break;
+	}
 	case WM_LBUTTONDOWN:
 	{
 		POINT m;
@@ -1055,17 +1227,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			return 0;
 		case 1:
 			// save
-			if (!SaveSFBB()) {
+			if (!SaveSFBB(hwnd)) {
 				return 0;
 			}
 			return 0;
 		case 2:
 			// zoom in
-			NewZoom(hwnd, 1.25f, false);
+			NewZoom(hwnd, 1.25f, 2);
 			return 0;
 		case 3:
 			// zoom out
-			NewZoom(hwnd, 0.8f, false);
+			NewZoom(hwnd, 0.8f, 2);
 			return 0;
 		case 4:
 			// zoom fit
@@ -1073,18 +1245,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			return 0;
 		case 5:
 			// zoom original
-			literalscaler = 1.0f;
+			mscaler = 1.0f;
+			RedrawImageOnBitmap(hwnd);
+
 			return 0;
 		case 6:
 			// rotate
-			MessageBox(NULL, "I haven't added this feature yet", "Can't rotate image", MB_OK);
+			
+			rotateImage90Degrees(hwnd, cpath);
+			OpenImage(hwnd, cpath.c_str());
+
+			//MessageBox(hwnd, "I haven't added this feature yet", "Can't rotate image", MB_OK);
 			return 0;
 		case 7: {
 
 			
 
 			// delete
-			int result = MessageBox(NULL, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
+			int result = MessageBox(hwnd, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
 			if (result == IDYES) {
 				DeleteFile(cpath.c_str());
 				CHAR szPath[MAX_PATH];
@@ -1098,10 +1276,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			}
 			return 0;
 		}
-		case 8:
+		case 8: {
+
 			// info
-			MessageBox(NULL, filepath, "Image Info", MB_OK);
+
+			char str[256];
+
+			sprintf(str, "Image: %s\nWidth: %d\nHeight: %d\n", cpath.c_str(), imgwidth, imgheight);
+
+			MessageBox(hwnd, str, "Image Info", MB_OK);
 			return 0;
+		}
 		}
 	}
 	case WM_MBUTTONDOWN:
@@ -1126,27 +1311,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		break;
 	}
 	case WM_MOUSELEAVE: {
+		Beep(1000, 1000);
+		break;
 	}
-	case WM_MOUSEMOVE: {
+	case WM_MOUSEMOVE:
+	case WM_NCMOUSEMOVE: {
 		POINT pos = { 0 };
 		GetCursorPos(&pos);
 		if (mouseDown) {
 
 			if (GetKeyState('G') & 0x8000) {
 				ScreenToClient(hwnd, &pos);
-				int k = (int)((float)(pos.x - CoordLeft) * (1.0f/literalscaler));
-				int v = (int)((float)(pos.y - CoordTop) * (1.0f / literalscaler));
-				
-					for (int y = 0; y < 30; y++) {
-						for (int x = 0; x < 30; x++) {
-							double yes = pow(x - 15, 2) + pow(y - 15, 2);
-							if (yes <= pow(15, 2)) {
+				int k = (int)((float)(pos.x - CoordLeft) * (1.0f/mscaler));
+				int v = (int)((float)(pos.y - CoordTop) * (1.0f / mscaler));
+					// drawing
+				int size = (float)imgheight * 0.05f;
+				int halfsize = size / 2;
 
-								uint32_t xloc = (x - 15) + k;
-								uint32_t yloc = (y - 15) + v;
+					for (int y = 0; y < size; y++) {
+						for (int x = 0; x < size; x++) {
+							double yes = pow(x - halfsize, 2) + pow(y - halfsize, 2);
+							if (yes <= pow(halfsize, 2)) {
+
+								uint32_t xloc = (x - halfsize) + k;
+								uint32_t yloc = (y - halfsize) + v;
 								if (xloc < imgwidth && yloc < imgheight && xloc >= 0 && yloc >= 0) {
 									uint32_t* memoryPath = GetMemoryLocation(imgdata, xloc, yloc, imgwidth);
-									*memoryPath = lerp(0xFFFF0000, *memoryPath, yes/pow(15,2)); // transparency
+									*memoryPath = lerp(0xFFFF0000, *memoryPath, yes/pow(halfsize,2)); // transparency
 								}
 							}
 						}
@@ -1198,6 +1389,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		if (temp != hwnd) {
 			return 0;
 		}
+		if (wparam == 'G') {
+
+		}
 		if (wparam == VK_F11) {
 			if (fullscreen) {
 				// disable fullscreen
@@ -1219,18 +1413,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			}
 		}
 		if (wparam == VK_RIGHT) {
-			/*
+			
 			const char* mpath = cpath.c_str();
 			std::string k = GetNextFilePath(mpath);
 			const char* npath = k.c_str();
 			//MessageBox(0, mpath, npath, MB_OKCANCEL);
-			if (npath != "" && npath != NULL) {
+			if (k != "No") {
 				OpenImage(hwnd, npath);
 			}
-			*/
+			
 		}
 		if (wparam == 'Z') {
-			if (!SaveSFBB()) {
+			if (!SaveSFBB(hwnd)) {
 				return 0;
 			}
 		}
@@ -1240,18 +1434,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		}
 
 		if (wparam == '1') {
-			literalscaler = 1.0f;
+			mscaler = 1.0f;
 		}
 
 		if (wparam == '2') {
-			literalscaler = 2.0f;
+			mscaler = 2.0f;
 		}
 		if (wparam == '3') {
-			literalscaler = 0.5f;
+			mscaler = 0.5f;
 		}
 
 		if (wparam == '4') {
-			literalscaler = 4.0f;
+			mscaler = 4.0f;
 		}
 
 		if (wparam == '5') {
@@ -1259,15 +1453,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		}
 
 		if (wparam == '6') {
-			literalscaler = 0.25f;
+			mscaler = 0.25f;
 		}
 
 		if (wparam == '7') {
-			literalscaler = 0.125f;
+			mscaler = 0.125f;
 		}
 
 		if (wparam == '8') {
-			literalscaler = 8.0f;
+			mscaler = 8.0f;
 		}
 		RedrawImageOnBitmap(hwnd);
 		break;
@@ -1294,10 +1488,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 		float v = 1;
 
-		if (zDelta > 0 && literalscaler < 400.0f) {
+		if (zDelta > 0 && mscaler < 400.0f) {
 			v = 1.25f;
 		}
-		else if(literalscaler > 0.01f){
+		else if(mscaler > 0.01f){
 			v = 0.8f;
 		}
 
@@ -1323,6 +1517,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	return 0;
 }
+
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
 name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
