@@ -3,6 +3,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
+#define NOMINMAX
+#include <math.h>
+#include <algorithm>
+#include <cmath>
 #include <windows.h>
 #include <shlwapi.h>
 #include <iostream>
@@ -18,6 +22,7 @@
 #include <string>
 #include <stdint.h>
 #include <stdbool.h>
+#include <Freetype/freetype.h>
 #include "font.h"
 #include "../resource.h"
 #include "stb_image.h"
@@ -100,6 +105,154 @@ uint32_t InvertColorChannels(uint32_t d) {
 	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
 }
 
+FT_Library ft;
+
+FT_Face face;
+
+uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
+{
+	// Extract the individual color channels from the input values
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+
+	// Calculate the lerped color values for each channel
+	uint8_t a = (1 - alpha) * a1 + alpha * a2;
+	uint8_t r = (1 - alpha) * r1 + alpha * r2;
+	uint8_t g = (1 - alpha) * g1 + alpha * g2;
+	uint8_t b = (1 - alpha) * b1 + alpha * b2;
+
+	// Combine the lerped color channels into a single 32-bit value
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+
+bool InitFont(HWND hwnd, const char* font, int size) {
+
+	if (FT_Init_FreeType(&ft)) {
+		MessageBox(hwnd, "Failed to initialize FreeType library\n", "Error", MB_OK);
+		return false;
+	}
+
+	if (FT_New_Face(ft, font, 0, &face)) {
+		MessageBox(hwnd, "Failed to load font\n", "Error", MB_OK);
+		return false;
+	}
+
+	FT_Set_Pixel_Sizes(face, 0, size);
+
+}
+
+void DiscardFont() {
+
+	FT_Done_Face(face);
+	FT_Done_FreeType(ft);
+}
+
+void dDrawRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			if (x < 1 || x > width - 2 || y < 1 || y > height - 2) {
+				uint32_t* ma = GetMemoryLocation(scrdata, xloc + x, yloc + y, kwidth);
+				*ma = lerp(*ma, color, opacity);
+			}
+		}
+	}
+}
+
+void dDrawRoundedRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint32_t* ma = GetMemoryLocation(scrdata, xloc + x, yloc + y, kwidth);
+			if (x < 1 || x > width - 2 || y < 1 || y > height - 2) {
+				if (!(x == 0 && y == 0) && !(x == width - 1 && y == height - 1) && !(x == width - 1 && y == 0) && !(x == 0 && y == height - 1)) {
+
+					*ma = lerp(*ma, color, opacity);
+				}
+			}
+		}
+	}
+}
+
+int RenderStringFancy(const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
+
+
+	const char* text = inputstr;
+
+	FT_GlyphSlot g = face->glyph;
+	int penX = 0;
+
+	for (const char* p = text; *p; ++p) {
+		if (FT_Load_Char(face, *p, FT_LOAD_RENDER))
+			continue;
+
+		FT_Bitmap* bitmap = &g->bitmap;
+
+
+		int yOffset = (g->metrics.horiBearingY - g->bitmap_top) >> 6;
+
+		int maxGlyphHeight = 0;
+		int maxDescender = 0;
+		if (g->bitmap.rows > maxGlyphHeight)
+			maxGlyphHeight = g->bitmap.rows;
+
+		int descender = (g->metrics.height >> 6) - yOffset;
+		if (descender > maxDescender)
+			maxDescender = descender;
+
+		for (int y = 0; y < bitmap->rows; ++y) {
+			for (int x = 0; x < bitmap->width; ++x) {
+				int pixelIndex = (y)*width + (penX + x);
+				unsigned char pixelValue = bitmap->buffer[y * bitmap->width + x];
+				uint32_t ptx = locX + penX + x;
+				uint32_t pty = locY + (face->size->metrics.ascender >> 6) - (bitmap->rows - y) + maxDescender;
+				
+				uint32_t* memoryPath = GetMemoryLocation(scrdata, ptx, pty, width);
+				uint32_t existingColor = *memoryPath;
+
+				*GetMemoryLocation(mem, ptx, pty, width) = lerp(existingColor, color, ((float)pixelValue / 255.0f));
+				//setPixel(scrData, width, penX + x, penY + y, pixelValue);
+			}
+		}
+
+		penX += g->advance.x >> 6;
+	}
+
+
+	return true;
+
+}
+
+
+void render(char* bitmap, uint32_t locX, uint32_t locY, uint32_t color) {
+	int set;
+	int mask;
+	for (int y = 0; y < 8; y++) {
+		for (int x = 0; x < 8; x++) {
+			set = bitmap[y] & 1 << x;
+			if (set) {
+				*GetMemoryLocation(scrdata, locX + x, locY + y, width) = color;
+			}
+		}
+	}
+}
+
+
+void RenderString(const char* input, uint32_t locX, uint32_t locY, uint32_t color) {
+	for (int i = 0; i < strlen(input); i++) {
+		render(font8x8_basic[input[i]], locX + (8 * i), locY, color);
+	}
+}
+
+char* GetRenderCharacters(char e) {
+	return font8x8_basic[e];
+}
 bool encodesfbbfile(void* idd, uint32_t iw, uint32_t ih, const char* filepath) {
 
 	int imgByteSize = (iw * ih * 4) + 2;
@@ -626,6 +779,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 	HWND hwnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, WS_OVERLAPPEDWINDOW | WS_VISIBLE, px, py, w_width, w_height, NULL, NULL, NULL, NULL);
 
+	InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
 	scrdata = malloc(width*height * 4);
 
 	toolbarData = LoadImageFromResource(IDB_PNG1, widthos, heightos, channelsos);
@@ -710,29 +864,6 @@ const char* FileOpenDialog(HWND hwnd) {
 	}
 
 	return 0;
-}
-
-uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
-{
-	// Extract the individual color channels from the input values
-	uint8_t a1 = (color1 >> 24) & 0xFF;
-	uint8_t r1 = (color1 >> 16) & 0xFF;
-	uint8_t g1 = (color1 >> 8) & 0xFF;
-	uint8_t b1 = color1 & 0xFF;
-
-	uint8_t a2 = (color2 >> 24) & 0xFF;
-	uint8_t r2 = (color2 >> 16) & 0xFF;
-	uint8_t g2 = (color2 >> 8) & 0xFF;
-	uint8_t b2 = color2 & 0xFF;
-
-	// Calculate the lerped color values for each channel
-	uint8_t a = (1 - alpha) * a1 + alpha * a2;
-	uint8_t r = (1 - alpha) * r1 + alpha * r2;
-	uint8_t g = (1 - alpha) * g1 + alpha * g2;
-	uint8_t b = (1 - alpha) * b1 + alpha * b2;
-
-	// Combine the lerped color channels into a single 32-bit value
-	return (a << 24) | (r << 16) | (g << 8) | b;
 }
 
 
@@ -871,29 +1002,6 @@ uint32_t* bilinear_scale(const uint32_t* input_buffer, const int input_width, co
 }
 
 
-void render(char* bitmap, uint32_t locX, uint32_t locY, uint32_t color) {
-	int set;
-	int mask;
-	for (int y = 0; y < 8; y++) {
-		for (int x = 0; x < 8; x++) {
-			set = bitmap[y] & 1 << x;
-			if (set) {
-				*GetMemoryLocation(scrdata, locX + x, locY + y, width) = color;
-			}
-		}
-	}
-}
-
-void RenderString(const char* input, uint32_t locX, uint32_t locY, uint32_t color) {
-	for (int i = 0; i < strlen(input); i++) {
-		render(font8x8_basic[input[i]], locX+(8*i), locY, color);
-	}
-}
-
-char* GetRenderCharacters(char e) {
-	return font8x8_basic[e];
-}
-
 
 //*********************************************
 void RedrawImageOnBitmap(HWND hwnd) {
@@ -1005,6 +1113,16 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			}
 		}
 
+		// drop shadow
+		for (uint32_t y = 0; y < 20; y++) {
+			for (uint32_t x = 0; x < width; x++) {
+				uint32_t color = 0x000000;
+
+				uint32_t* memoryPath = GetMemoryLocation(scrdata, x, y+toolheight, width);
+				*memoryPath = lerp(*memoryPath, color, (1.0f-((float)y/20.0f))*0.3f); // transparency
+			}
+		}
+
 		// BUTTONS
 
 		int p = 5;
@@ -1098,7 +1216,10 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			int loc = 1 + (selectedbutton * GetButtonInterval() + 2);
 			//gaussian_blur((uint32_t*)scrdata, 40, 40, 2.0f, loc+5, toolheight+6)
 			gaussian_blur((uint32_t*)scrdata, (txt.length() * 8)+10, 18, 16.0f, width, loc, toolheight+5);
-			RenderString(txt.c_str(), loc + 5, toolheight + 10, 0xFFFFFF);
+			//dDrawRectangle(scrdata, width, loc, toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
+			dDrawRoundedRectangle(scrdata, width, loc-1, toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
+			//RenderString(txt.c_str(), loc + 5, toolheight + 10, 0xFFFFFF);
+			RenderStringFancy(txt.c_str(), loc + 4, toolheight + 2, 0xFFFFFF, scrdata);
 		}
 	}
 	
@@ -1111,7 +1232,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 	}
 	else {
 
-		sprintf(str, "View Image | Type 'F' or click the folder icon to open new image");
+		sprintf(str, "View Image");
 	}
 
 	SetWindowText(hwnd, str);
@@ -1123,6 +1244,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
+
 
 	// tell our lovely win32 api to update the window for us <3
 	SetDIBitsToDevice(hdc, 0, 0, width, height, 0, 0, 0, height, scrdata, &bmi, DIB_RGB_COLORS);
