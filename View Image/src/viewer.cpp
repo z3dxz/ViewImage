@@ -1,5 +1,5 @@
 // font: https://github.com/dhepper/font8x8
-#define toolheight 43
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
@@ -22,6 +22,7 @@
 #include <string>
 #include <stdint.h>
 #include <stdbool.h>
+#include <Shobjidl.h>
 #include <Freetype/freetype.h>
 #include "font.h"
 #include "../resource.h"
@@ -30,7 +31,8 @@
 #include <immintrin.h> // for SIMD intrinsics
 #pragma comment(lib, "shlwapi.lib")
 
-
+int expectedToolheight = 43;
+int toolheight = expectedToolheight;
 int maxButtons = 9;
 int selectedbutton = -1;
 
@@ -83,6 +85,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 #include <stdio.h>
 #include <string.h>
 #include "stb_image.h"
+#include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
@@ -96,7 +99,7 @@ bool fullscreen = false;
 WINDOWPLACEMENT wpPrev;
 
 uint32_t InvertColorChannelsInverse(uint32_t d) {
-	if (standardFomat) return d; 
+	if (standardFomat) return d;
 	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
 }
 
@@ -153,6 +156,15 @@ void DiscardFont() {
 
 	FT_Done_Face(face);
 	FT_Done_FreeType(ft);
+}
+
+void dDrawFilledRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint32_t* ma = GetMemoryLocation(scrdata, xloc + x, yloc + y, kwidth);
+			*ma = lerp(*ma, color, opacity);
+		}
+	}
 }
 
 void dDrawRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
@@ -212,7 +224,7 @@ int RenderStringFancy(const char* inputstr, uint32_t locX, uint32_t locY, uint32
 				unsigned char pixelValue = bitmap->buffer[y * bitmap->width + x];
 				uint32_t ptx = locX + penX + x;
 				uint32_t pty = locY + (face->size->metrics.ascender >> 6) - (bitmap->rows - y) + maxDescender;
-				
+
 				uint32_t* memoryPath = GetMemoryLocation(scrdata, ptx, pty, width);
 				uint32_t existingColor = *memoryPath;
 
@@ -253,6 +265,10 @@ void RenderString(const char* input, uint32_t locX, uint32_t locY, uint32_t colo
 char* GetRenderCharacters(char e) {
 	return font8x8_basic[e];
 }
+
+std::vector<std::string> folderlist;
+
+
 bool encodesfbbfile(void* idd, uint32_t iw, uint32_t ih, const char* filepath) {
 
 	int imgByteSize = (iw * ih * 4) + 2;
@@ -262,7 +278,7 @@ bool encodesfbbfile(void* idd, uint32_t iw, uint32_t ih, const char* filepath) {
 	if (!data) {
 		//no img data
 		return false;
-	} 
+	}
 
 	if (iw > 65536 || ih > 65536) {
 		// image width or height too big
@@ -338,7 +354,7 @@ bool encodesfbbfile(void* idd, uint32_t iw, uint32_t ih, const char* filepath) {
 		GENERIC_WRITE,          // Desired access
 		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,        // Share mode
 		NULL,                   // Security attributes
-		CREATE_ALWAYS,            
+		CREATE_ALWAYS,
 		FILE_ATTRIBUTE_NORMAL,  // Flags and attributes
 		NULL);                  // Template file handle
 
@@ -390,7 +406,7 @@ bool encodeimage(const char* filepath) {
 
 void* decodesfbb(const char* filepath, int* imgwidth, int* imgheight) {
 	printf("\n -- Reading File -- \n");
-	
+
 	HANDLE hFile = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
 
 	if (hFile == INVALID_HANDLE_VALUE) {
@@ -567,7 +583,7 @@ std::string GetNextFilePath(const char* file_Path) {
 
 void no_offset(HWND hwnd) {
 	ilocX = 0;
-	ilocY = 0;
+	ilocY = toolheight/2;
 
 	RedrawImageOnBitmap(hwnd);
 }
@@ -629,7 +645,6 @@ void* getImgData(HWND hwnd, const char* fpath, int* w, int* h, int* c, bool* sf)
 			return 0;
 		}
 	}
-
 	else if (isFile(fpath, ".jpeg") || isFile(fpath, ".jpg") || isFile(fpath, ".png") || isFile(fpath, ".tga") || isFile(fpath, ".bmp") || isFile(fpath, ".psd") || isFile(fpath, ".gif") || isFile(fpath, ".hdr") || isFile(fpath, ".pic") || isFile(fpath, ".pmn")) {
 
 		id = stbi_load(fpath, w, h, &channels, 4);
@@ -648,8 +663,12 @@ void* getImgData(HWND hwnd, const char* fpath, int* w, int* h, int* c, bool* sf)
 }
 
 bool OpenImage(HWND hwnd, const char* fpath) {
-	strcpy(filepath, fpath);
+	std::string k = std::string(fpath);
 
+	strcpy(filepath, fpath);
+	if (imgdata) {
+		//free(imgdata);
+	}
 	imgdata = getImgData(hwnd, fpath, &imgwidth, &imgheight, &channels, &standardFomat);
 	if (!imgdata) {
 		MessageBox(hwnd, "Error Loading Image", "Error", MB_OK);
@@ -661,7 +680,6 @@ bool OpenImage(HWND hwnd, const char* fpath) {
 
 	cpath = std::string(fpath);
 
-	RedrawImageOnBitmap(hwnd);
 	return true;
 }
 
@@ -756,7 +774,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	const char* WINDOW_NAME = "View Image";
 
 	WNDCLASSEX wc = { 0 };
-	
+
 	wc.cbSize = sizeof(WNDCLASSEX);
 	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	wc.lpszClassName = CLASS_NAME;
@@ -780,7 +798,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	HWND hwnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, WS_OVERLAPPEDWINDOW | WS_VISIBLE, px, py, w_width, w_height, NULL, NULL, NULL, NULL);
 
 	InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
-	scrdata = malloc(width*height * 4);
+	scrdata = malloc(width * height * 4);
 
 	toolbarData = LoadImageFromResource(IDB_PNG1, widthos, heightos, channelsos);
 
@@ -839,7 +857,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 			DispatchMessage(&msg);
 		}
 	}
-	
+
 	free(path);
 	return 0;
 }
@@ -907,7 +925,7 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 			for (k = 0; k < kernel_size; k++) {
 				int xk = x - (kernel_size - 1) / 2 + k;
 				if (xk >= 0 && xk < width) {
-					uint32_t pixel = pixels[(y+offY) * width + (xk+offX)];
+					uint32_t pixel = pixels[(y + offY) * width + (xk + offX)];
 					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
 					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
 					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
@@ -919,7 +937,7 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 		}
 		// Copy row back into pixels array
 		for (x = 0; x < lW; x++) {
-			pixels[(y+offY) * width + (x+offX)] = row[x];
+			pixels[(y + offY) * width + (x + offX)] = row[x];
 		}
 	}
 
@@ -931,7 +949,7 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 			for (k = 0; k < kernel_size; k++) {
 				int yk = y - (kernel_size - 1) / 2 + k;
 				if (yk >= 0 && yk < lH) {
-					uint32_t pixel = pixels[(yk+offY) * width + (x+offX)];
+					uint32_t pixel = pixels[(yk + offY) * width + (x + offX)];
 					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
 					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
 					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
@@ -943,7 +961,7 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 		}
 		// Copy row back into pixels array
 		for (y = 0; y < lH; y++) {
-			pixels[(offY+y) * width + (offX+x)] = row[y];
+			pixels[(offY + y) * width + (offX + x)] = row[y];
 		}
 	}
 
@@ -1007,8 +1025,8 @@ uint32_t* bilinear_scale(const uint32_t* input_buffer, const int input_width, co
 void RedrawImageOnBitmap(HWND hwnd) {
 
 	// Clear the bitmap
-	
-	
+
+
 	uint32_t color = 0x101010;
 
 	bool paintBG = true;
@@ -1016,9 +1034,10 @@ void RedrawImageOnBitmap(HWND hwnd) {
 	if (GetKeyState('L') & 0x8000 && GetKeyState('P') & 0x8000 && GetKeyState('M') & 0x8000) {
 		paintBG = false;
 	}
-	
-	for (uint32_t y = 0; y < height; y++) { 
-		 
+
+	// render the image
+	for (uint32_t y = 0; y < height; y++) {
+
 		for (uint32_t x = 0; x < width; x++) {
 			uint32_t bkc{};
 			// bkc
@@ -1032,16 +1051,16 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			float nscaler = 1.0f / mscaler;
 
 			int32_t offX = (((int32_t)width - (int32_t)(imgwidth * mscaler)) / 2);
-			int32_t offY = (((int32_t)height + toolheight - (int32_t)(imgheight * mscaler)) / 2);
+			int32_t offY = (((int32_t)height - (int32_t)(imgheight * mscaler)) / 2);
 
 			offX += ilocX;
 			offY += ilocY;
 
 
-			int32_t ptx = (x-offX) * nscaler;
-			int32_t pty = (y-offY) * nscaler;
+			int32_t ptx = (x - offX) * nscaler;
+			int32_t pty = (y - offY) * nscaler;
 
-			
+
 			int margin = 2;
 			if (ptx < imgwidth && pty < imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < height - margin && x < width - margin) {
 				uint32_t c = *GetMemoryLocation(imgdata, ptx, pty, imgwidth);
@@ -1063,11 +1082,11 @@ void RedrawImageOnBitmap(HWND hwnd) {
 
 	if (imgwidth > 1) {
 
-		CoordLeft = (width / 2) - (-ilocX)  - (int)(((float)(imgwidth / 2)) * mscaler);
-		CoordTop = (height / 2)  - (-ilocY) - (int)(((float)(imgheight / 2)) * mscaler) + (toolheight/2);
+		CoordLeft = (width / 2) - (-ilocX) - (int)(((float)(imgwidth / 2)) * mscaler);
+		CoordTop = (height / 2) - (-ilocY) - (int)(((float)(imgheight / 2)) * mscaler);
 
 		CoordRight = (width / 2) - (-ilocX) + (int)(((float)(imgwidth / 2)) * mscaler);
-		CoordBottom = (height / 2) - (-ilocY) + (int)(((float)(imgheight / 2)) * mscaler) + (toolheight / 2);
+		CoordBottom = (height / 2) - (-ilocY) + (int)(((float)(imgheight / 2)) * mscaler);
 
 	}
 
@@ -1118,8 +1137,8 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			for (uint32_t x = 0; x < width; x++) {
 				uint32_t color = 0x000000;
 
-				uint32_t* memoryPath = GetMemoryLocation(scrdata, x, y+toolheight, width);
-				*memoryPath = lerp(*memoryPath, color, (1.0f-((float)y/20.0f))*0.3f); // transparency
+				uint32_t* memoryPath = GetMemoryLocation(scrdata, x, y + toolheight, width);
+				*memoryPath = lerp(*memoryPath, color, (1.0f - ((float)y / 20.0f)) * 0.3f); // transparency
 			}
 		}
 
@@ -1140,12 +1159,12 @@ void RedrawImageOnBitmap(HWND hwnd) {
 					uint32_t l = (*GetMemoryLocation(toolbarData, x + k, y, widthos));
 					float ll = (float)((l & 0x00FF0000) >> 16) / 255.0f;
 					uint32_t* memoryPath = GetMemoryLocation(scrdata, p + x, 6 + y, width); \
-					if (i != selectedbutton) {
-						*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * 0.7f); // transparency
-					}
-					else {
-						*memoryPath = lerp(*memoryPath, 0xFFE0E0, ll * 1.0f); // transparency
-					}
+						if (i != selectedbutton) {
+							*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * 0.7f); // transparency
+						}
+						else {
+							*memoryPath = lerp(*memoryPath, 0xFFE0E0, ll * 1.0f); // transparency
+						}
 				}
 			}
 			p += iconSize + 5; k += iconSize + 1;
@@ -1153,7 +1172,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 
 		if (selectedbutton >= 0 && selectedbutton < maxButtons) {
 			// rounded corners: split hover thing into three things
-			
+
 
 			for (uint32_t y = 0; y < 1; y++) {
 				for (uint32_t x = 0; x < GetButtonInterval() - 2; x++) {
@@ -1175,54 +1194,55 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			}
 
 			std::string txt = "M";
-			switch(selectedbutton){
-				case 0:
-					// open
-					txt = "Open";
-					break;
-				case 1:
-					// save
-					txt = "Save as SFBB";
-					break;
-				case 2:
-					// zoom in
-					txt = "Zoom In";
-					break;
-				case 3:
-					// zoom out
-					txt = "Zoom Out";
-					break;
-				case 4:
-					// zoom fit
-					txt = "Zoom Auto";
-					break;
-				case 5:
-					// zoom original
-					txt = "Zoom 1:1 (100%)";
-					break;
-				case 6:
-					// rotate
-					txt = "Rotate and save image";
-					break;
-				case 7:
-					// delete
-					txt = "DELETE image";
-					break;
-				case 8:
-					// info
-					txt = "Image Info";
-					break;
+			switch (selectedbutton) {
+			case 0:
+				// open
+				txt = "Open";
+				break;
+			case 1:
+				// save
+				txt = "Save as SFBB";
+				break;
+			case 2:
+				// zoom in
+				txt = "Zoom In";
+				break;
+			case 3:
+				// zoom out
+				txt = "Zoom Out";
+				break;
+			case 4:
+				// zoom fit
+				txt = "Zoom Auto";
+				break;
+			case 5:
+				// zoom original
+				txt = "Zoom 1:1 (100%)";
+				break;
+			case 6:
+				// rotate
+				txt = "Rotate and save image";
+				break;
+			case 7:
+				// delete
+				txt = "DELETE image";
+				break;
+			case 8:
+				// info
+				txt = "Image Info";
+				break;
 			}
 			int loc = 1 + (selectedbutton * GetButtonInterval() + 2);
 			//gaussian_blur((uint32_t*)scrdata, 40, 40, 2.0f, loc+5, toolheight+6)
-			gaussian_blur((uint32_t*)scrdata, (txt.length() * 8)+10, 18, 16.0f, width, loc, toolheight+5);
+			gaussian_blur((uint32_t*)scrdata, (txt.length() * 8) + 10, 18, 4.0f, width, loc, toolheight + 5);
 			//dDrawRectangle(scrdata, width, loc, toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
-			dDrawRoundedRectangle(scrdata, width, loc-1, toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
+			dDrawFilledRectangle(scrdata, width, loc, toolheight+5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
+			dDrawRoundedRectangle(scrdata, width, loc - 1, toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
 			//RenderString(txt.c_str(), loc + 5, toolheight + 10, 0xFFFFFF);
 			RenderStringFancy(txt.c_str(), loc + 4, toolheight + 2, 0xFFFFFF, scrdata);
 		}
 	}
-	
+
 	// Update window title
 
 	char str[256];
@@ -1236,7 +1256,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 	}
 
 	SetWindowText(hwnd, str);
-	
+
 	BITMAPINFO bmi;
 	bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
 	bmi.bmiHeader.biWidth = width;
@@ -1264,7 +1284,7 @@ void PrepareOpenImage(HWND hwnd) {
 
 int SaveImage() {
 
-	
+
 
 	return 0;
 }
@@ -1320,6 +1340,9 @@ void NewZoom(HWND hwnd, float v, int mouse) {
 
 bool lock = true;
 
+bool isSize;
+int distYz;
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	switch (msg) {
 	case WM_CREATE: {
@@ -1333,7 +1356,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	{
 		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lparam;
 		lpMMI->ptMinTrackSize.x = 340;
-		lpMMI->ptMinTrackSize.y = toolheight+70;
+		lpMMI->ptMinTrackSize.y = toolheight + 70;
 		break;
 	}
 	case WM_LBUTTONDOWN:
@@ -1342,7 +1365,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		GetCursorPos(&m);
 		ScreenToClient(hwnd, &m);
 		uint32_t id = getXbuttonID(m);
-		switch(id) {
+		switch (id) {
 		case 0:
 			// open
 			PrepareOpenImage(hwnd);
@@ -1373,7 +1396,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			return 0;
 		case 6:
 			// rotate
-			
+
 			rotateImage90Degrees(hwnd, cpath);
 			OpenImage(hwnd, cpath.c_str());
 
@@ -1381,7 +1404,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			return 0;
 		case 7: {
 
-			
+
 
 			// delete
 			int result = MessageBox(hwnd, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
@@ -1400,7 +1423,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		}
 		case 8: {
 
-			// info
+			// image info
 
 			char str[256];
 
@@ -1412,7 +1435,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		}
 	}
 	case WM_MBUTTONDOWN:
-	case WM_RBUTTONDOWN:{
+	case WM_RBUTTONDOWN: {
 		lockimgoffx = ilocX;
 		lockimgoffy = ilocY;
 		GetCursorPos(&LockmPos);
@@ -1429,6 +1452,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_MBUTTONUP:
 	case WM_RBUTTONUP: {
+		isSize = false;
 		mouseDown = false;
 		break;
 	}
@@ -1444,27 +1468,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 			if (GetKeyState('G') & 0x8000) {
 				ScreenToClient(hwnd, &pos);
-				int k = (int)((float)(pos.x - CoordLeft) * (1.0f/mscaler));
+				int k = (int)((float)(pos.x - CoordLeft) * (1.0f / mscaler));
 				int v = (int)((float)(pos.y - CoordTop) * (1.0f / mscaler));
-					// drawing
+				// drawing
 				int size = (float)imgheight * 0.05f;
 				int halfsize = size / 2;
 
-					for (int y = 0; y < size; y++) {
-						for (int x = 0; x < size; x++) {
-							double yes = pow(x - halfsize, 2) + pow(y - halfsize, 2);
-							if (yes <= pow(halfsize, 2)) {
+				for (int y = 0; y < size; y++) {
+					for (int x = 0; x < size; x++) {
+						double yes = pow(x - halfsize, 2) + pow(y - halfsize, 2);
+						if (yes <= pow(halfsize, 2)) {
 
-								uint32_t xloc = (x - halfsize) + k;
-								uint32_t yloc = (y - halfsize) + v;
-								if (xloc < imgwidth && yloc < imgheight && xloc >= 0 && yloc >= 0) {
-									uint32_t* memoryPath = GetMemoryLocation(imgdata, xloc, yloc, imgwidth);
-									*memoryPath = lerp(0xFFFF0000, *memoryPath, yes/pow(halfsize,2)); // transparency
-								}
+							uint32_t xloc = (x - halfsize) + k;
+							uint32_t yloc = (y - halfsize) + v;
+							if (xloc < imgwidth && yloc < imgheight && xloc >= 0 && yloc >= 0) {
+								uint32_t* memoryPath = GetMemoryLocation(imgdata, xloc, yloc, imgwidth);
+								*memoryPath = lerp(0xFFFF0000, *memoryPath, yes / pow(halfsize, 2)); // transparency
 							}
 						}
 					}
-				
+				}
+
 				RedrawImageOnBitmap(hwnd);
 				break;
 			}
@@ -1472,24 +1496,29 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 				ilocX = lockimgoffx - (LockmPos.x - pos.x);
 				ilocY = lockimgoffy - (LockmPos.y - pos.y);
+
 			}
 
-			RedrawImageOnBitmap(hwnd);
-		}
-
-		ScreenToClient(hwnd, &pos);
-		if (pos.y <= toolheight) {
-			lock = true;
-			selectedbutton = getXbuttonID(pos);
 			RedrawImageOnBitmap(hwnd);
 		}
 		else {
-			if (lock) {
-				selectedbutton = -1;
+
+			ScreenToClient(hwnd, &pos);
+
+			if (pos.y <= toolheight) {
+				lock = true;
+				selectedbutton = getXbuttonID(pos);
 				RedrawImageOnBitmap(hwnd);
-				lock = false;
+			}
+			else {
+				if (lock) {
+					selectedbutton = -1;
+					RedrawImageOnBitmap(hwnd);
+					lock = false;
+				}
 			}
 		}
+
 		break;
 	}
 
@@ -1535,7 +1564,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			}
 		}
 		if (wparam == VK_RIGHT) {
-			
+
 			const char* mpath = cpath.c_str();
 			std::string k = GetNextFilePath(mpath);
 			const char* npath = k.c_str();
@@ -1543,7 +1572,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			if (k != "No") {
 				OpenImage(hwnd, npath);
 			}
-			
+
 		}
 		if (wparam == 'Z') {
 			if (!SaveSFBB(hwnd)) {
@@ -1590,7 +1619,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_SIZE: {
 
-		RECT ws = {0};
+		RECT ws = { 0 };
 		GetClientRect(hwnd, &ws);
 		width = ws.right - ws.left;
 		height = ws.bottom - ws.top;
@@ -1613,7 +1642,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		if (zDelta > 0 && mscaler < 400.0f) {
 			v = 1.25f;
 		}
-		else if(mscaler > 0.01f){
+		else if (mscaler > 0.01f) {
 			v = 0.8f;
 		}
 
