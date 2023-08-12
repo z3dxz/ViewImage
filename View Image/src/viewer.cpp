@@ -1,5 +1,8 @@
 // font: https://github.com/dhepper/font8x8
 
+/*
+
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
@@ -10,7 +13,6 @@
 #include <windows.h>
 #include <shlwapi.h>
 #include <iostream>
-#include <windows.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +31,13 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include <immintrin.h> // for SIMD intrinsics
+#include <windows.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+#include "mathops.h"
+#include "stb_image.h"
+#include <vector>
 #pragma comment(lib, "shlwapi.lib")
 
 int expectedToolheight = 43;
@@ -37,9 +46,6 @@ int maxButtons = 9;
 int selectedbutton = -1;
 
 char filepath[1024];
-
-bool standardFomat = true;
-
 
 bool mouseDown = false;
 
@@ -80,12 +86,6 @@ int CoordBottom;
 void RedrawImageOnBitmap(HWND hwnd);
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-#include <windows.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-#include "stb_image.h"
-#include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
@@ -98,42 +98,10 @@ bool fullscreen = false;
 
 WINDOWPLACEMENT wpPrev;
 
-uint32_t InvertColorChannelsInverse(uint32_t d) {
-	if (standardFomat) return d;
-	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
-}
-
-uint32_t InvertColorChannels(uint32_t d) {
-	if (!standardFomat) return d;
-	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
-}
 
 FT_Library ft;
 
 FT_Face face;
-
-uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
-{
-	// Extract the individual color channels from the input values
-	uint8_t a1 = (color1 >> 24) & 0xFF;
-	uint8_t r1 = (color1 >> 16) & 0xFF;
-	uint8_t g1 = (color1 >> 8) & 0xFF;
-	uint8_t b1 = color1 & 0xFF;
-
-	uint8_t a2 = (color2 >> 24) & 0xFF;
-	uint8_t r2 = (color2 >> 16) & 0xFF;
-	uint8_t g2 = (color2 >> 8) & 0xFF;
-	uint8_t b2 = color2 & 0xFF;
-
-	// Calculate the lerped color values for each channel
-	uint8_t a = (1 - alpha) * a1 + alpha * a2;
-	uint8_t r = (1 - alpha) * r1 + alpha * r2;
-	uint8_t g = (1 - alpha) * g1 + alpha * g2;
-	uint8_t b = (1 - alpha) * b1 + alpha * b2;
-
-	// Combine the lerped color channels into a single 32-bit value
-	return (a << 24) | (r << 16) | (g << 8) | b;
-}
 
 
 bool InitFont(HWND hwnd, const char* font, int size) {
@@ -268,221 +236,6 @@ char* GetRenderCharacters(char e) {
 
 std::vector<std::string> folderlist;
 
-
-bool encodesfbbfile(void* idd, uint32_t iw, uint32_t ih, const char* filepath) {
-
-	int imgByteSize = (iw * ih * 4) + 2;
-
-	void* data = malloc(imgByteSize);
-
-	if (!data) {
-		//no img data
-		return false;
-	}
-
-	if (iw > 65536 || ih > 65536) {
-		// image width or height too big
-		return false;
-		//return "sorry, image width or height is too big";
-	}
-
-
-	wchar_t* ptr_ = (wchar_t*)data;
-
-	*ptr_ = iw;
-
-	byte* ptr = (byte*)data;
-	ptr += 2;
-
-
-	//ptr += 4;
-
-	//*ptr = height;
-
-	//ptr += 4;
-
-
-	for (int y = 0; y < ih; y++) {
-		for (int x = 0; x < iw; x++) {
-			INT8 pix = (*GetMemoryLocation(idd, x, y, iw));
-			*ptr = pix;
-			ptr++;
-		}
-	}
-
-
-	for (int y = 0; y < ih; y++) {
-		for (int x = 0; x < iw; x++) {
-			INT8 pix = (*GetMemoryLocation(idd, x, y, iw)) >> 8;
-			*ptr = pix;
-			ptr++;
-		}
-	}
-
-
-	for (int y = 0; y < ih; y++) {
-		for (int x = 0; x < iw; x++) {
-			INT8 pix = (*GetMemoryLocation(idd, x, y, iw)) >> 16;
-			*ptr = pix;
-			ptr++;
-		}
-	}
-
-	for (int y = 0; y < ih; y++) {
-		for (int x = 0; x < iw; x++) {
-			INT8 pix = (*GetMemoryLocation(idd, x, y, iw)) >> 24;
-			*ptr = pix;
-			ptr++;
-		}
-	}
-
-
-
-	char str_path[256];
-	strcpy(str_path, filepath);
-
-	char* last_dot = strrchr(str_path, '.');
-	if (last_dot != NULL) {
-		*last_dot = '\0';
-	}
-
-	strcat(str_path, ".sfbb");
-
-	// write to a file
-	HANDLE hFile = CreateFile(
-		str_path,     // Filename
-		GENERIC_WRITE,          // Desired access
-		FILE_SHARE_WRITE | FILE_SHARE_READ | FILE_SHARE_DELETE,        // Share mode
-		NULL,                   // Security attributes
-		CREATE_ALWAYS,
-		FILE_ATTRIBUTE_NORMAL,  // Flags and attributes
-		NULL);                  // Template file handle
-
-
-
-	if (hFile == INVALID_HANDLE_VALUE)
-	{
-		return "sorry, no file handling";
-	}
-
-
-	// Write data to the file
-	DWORD bytesWritten;
-	WriteFile(
-		hFile,            // Handle to the file
-		data,  // Buffer to write
-		imgByteSize,   // Buffer size
-		&bytesWritten,    // Bytes written
-		0);         // Overlapped
-
-	// Close the handle once we don't need it.
-	CloseHandle(hFile);
-
-	free(data);
-
-	return true;
-}
-
-bool encodeimage(const char* filepath) {
-
-	printf("\n -- Converting File -- \n");
-
-	int imgwidth;
-	int imgheight;
-	int channels;
-	void* imgdata2 = stbi_load(filepath, &imgwidth, &imgheight, &channels, 4);
-
-	if (!imgdata2) {
-		return "sorry, file is not a bitmap or failed to load for some reason";
-	}
-
-	bool l = encodesfbbfile(imgdata2, imgwidth, imgheight, filepath);
-
-	free(imgdata2);
-
-	return l;
-
-}
-
-void* decodesfbb(const char* filepath, int* imgwidth, int* imgheight) {
-	printf("\n -- Reading File -- \n");
-
-	HANDLE hFile = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
-
-	if (hFile == INVALID_HANDLE_VALUE) {
-		printf("sorry, the handle value was invalid");
-		return 0;
-	}
-
-	DWORD fsize = GetFileSize(hFile, 0);
-	printf("File Size: %i\n", fsize);
-
-	int sizeOfAllocation = fsize;
-	void* data = malloc(sizeOfAllocation);
-	DWORD dwBytesRead = 0;
-	DWORD dwBytesWritten = 0;
-
-	if (!ReadFile(hFile, data, sizeOfAllocation, &dwBytesRead, NULL)) {
-		return 0;
-	}
-
-	uint16_t* widthptr = (uint16_t*)data;
-	if (widthptr == NULL) {
-		printf("sorry, reading width failed\n");
-		return 0;
-	}
-
-
-	int numOfPixels = (fsize - 2) / 4;
-
-	printf("Number of pixels: %i\n", numOfPixels);
-
-	int width = *(widthptr);
-
-	printf("Width: %i\n", width);
-
-	if (width == 0) {
-		printf("Width is zero");
-		return 0;
-	}
-
-	int height = numOfPixels / width;
-
-	printf("Height: %i\n", height);
-
-	int bitmapDataSize = numOfPixels * 4;
-
-	void* bitmapData = malloc(bitmapDataSize);
-
-	int* bmp_ptr = (int*)bitmapData;
-
-	byte* dataptr = (byte*)data;
-
-	for (int i = 0; i < (long long int)numOfPixels; i++) {
-
-		// data
-		byte* r_ptr = (dataptr + 2 + i);
-		byte* g_ptr = (dataptr + 2 + i) + numOfPixels;
-		byte* b_ptr = (dataptr + 2 + i) + numOfPixels * 2;
-		byte* a_ptr = (dataptr + 2 + i) + numOfPixels * 3;
-
-		//Gdiplus::Color c(*a_ptr, *r_ptr, *g_ptr, *b_ptr);
-
-		int r = *r_ptr;
-		int g = *g_ptr;
-		int b = *b_ptr;
-		int a = *a_ptr;
-
-		int c = (a * 16777216) + (r * 65536) + (g * 256) + b;
-		*bmp_ptr++ = c;
-	}
-
-	*imgwidth = width;
-	*imgheight = height;
-
-	return bitmapData;
-}
-
 unsigned char* LoadImageFromResource(int resourceId, int& width, int& height, int& channels)
 {
 	// Get the instance handle of the current module
@@ -555,7 +308,7 @@ std::string GetNextFilePath(const char* file_Path) {
 			{
 				std::string fileName = fileData.cFileName;
 				std::string extension = fileName.substr(fileName.find_last_of(".") + 1);
-				if (extension == "sfbb" || extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "bmp" || extension == "gif")
+				if (extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "bmp" || extension == "gif")
 				{
 					if (foundCurrentFile)
 					{
@@ -593,59 +346,35 @@ float log_base_1_25(float x) {
 	return log(x) / log_1_25;
 }
 
+float roundzoom(float z) {
+	return pow(1.25f, round(log_base_1_25(z)));
+}
+
 void autozoom(HWND hwnd) {
 
 	no_offset(hwnd);
 
 	float precentX = (float)width / (float)imgwidth;
-	float precentY = (float)height / (float)imgheight;
+	float precentY = (float)(height-toolheight) / (float)imgheight;
 
 	float e = fmin(precentX, precentY);
 
-	float fzoom = e * 0.9f;
+	float fzoom = e;
+	if (imgheight < 50) { fzoom = e / 2; }
 	// round to the nearest power of 1.25 (for easy zooming back to 100)
-	mscaler = pow(1.25f, round(log_base_1_25(fzoom)));
-
-	if (mscaler > 1.0f && imgheight > 5) mscaler = 1.0f;
+	mscaler = fzoom;
+	//if (mscaler > 1.0f && imgheight > 5) mscaler = 1.0f;
 
 	RedrawImageOnBitmap(hwnd);
-}
-
-bool isFile(const char* str, const char* suffix) {
-	size_t len_str = strlen(str);
-	size_t len_suffix = strlen(suffix);
-	if (len_str < len_suffix) {
-		return false;
-	}
-	for (size_t i = len_suffix; i > 0; i--) {
-		if (tolower(str[len_str - i]) != tolower(suffix[len_suffix - i])) {
-			return false;
-		}
-	}
-	return true;
 }
 
 const int iconSize = 30; // 50px
 
 int channels;
-void* getImgData(HWND hwnd, const char* fpath, int* w, int* h, int* c, bool* sf) {
+void* getImgData(HWND hwnd, const char* fpath, int* w, int* h, int* c) {
 	void* id;
 
-	*sf = true;
-
-	if (isFile(fpath, ".sfbb")) {
-
-		*sf = false;
-		id = decodesfbb(fpath, w, h);
-		*c = 4;
-
-
-		if (!id) {
-			MessageBox(hwnd, "Unable to load SFBB image", "Unknown Error", MB_OK);
-			return 0;
-		}
-	}
-	else if (isFile(fpath, ".jpeg") || isFile(fpath, ".jpg") || isFile(fpath, ".png") || isFile(fpath, ".tga") || isFile(fpath, ".bmp") || isFile(fpath, ".psd") || isFile(fpath, ".gif") || isFile(fpath, ".hdr") || isFile(fpath, ".pic") || isFile(fpath, ".pmn")) {
+	if (isFile(fpath, ".jpeg") || isFile(fpath, ".jpg") || isFile(fpath, ".png") || isFile(fpath, ".tga") || isFile(fpath, ".bmp") || isFile(fpath, ".psd") || isFile(fpath, ".gif") || isFile(fpath, ".hdr") || isFile(fpath, ".pic") || isFile(fpath, ".pmn")) {
 
 		id = stbi_load(fpath, w, h, &channels, 4);
 
@@ -669,7 +398,7 @@ bool OpenImage(HWND hwnd, const char* fpath) {
 	if (imgdata) {
 		//free(imgdata);
 	}
-	imgdata = getImgData(hwnd, fpath, &imgwidth, &imgheight, &channels, &standardFomat);
+	imgdata = getImgData(hwnd, fpath, &imgwidth, &imgheight, &channels);
 	if (!imgdata) {
 		MessageBox(hwnd, "Error Loading Image", "Error", MB_OK);
 		return false;
@@ -689,8 +418,7 @@ void rotateImage90Degrees(HWND hwnd, const std::string& inputPath) {
 	int width, height;
 	int channels = 4;
 	int channels0;
-	bool sf;
-	unsigned char* image = (unsigned char*)getImgData(hwnd, inputPath.c_str(), &width, &height, &channels0, &sf);
+	unsigned char* image = (unsigned char*)getImgData(hwnd, inputPath.c_str(), &width, &height, &channels0);
 
 
 	if (!image) {
@@ -708,25 +436,13 @@ void rotateImage90Degrees(HWND hwnd, const std::string& inputPath) {
 			int rotatedY = x;
 			for (int c = 0; c < channels; ++c) {
 				int ck = c;
-				if (!sf) {
-					// inverse channels
-					if (c == 0) ck = 2;
-					if (c == 2) ck = 0;
-				}
 				rotatedImage[(rotatedY * height + rotatedX) * channels + c] = image[(y * width + x) * channels + ck];
 			}
 		}
 	}
 	// Save the rotated image using stb_image_write
-	if (sf) {
-		if (!stbi_write_png(inputPath.c_str(), height, width, channels, rotatedImage, 0)) {
-			MessageBox(hwnd, "Failed to save rotated Standard image.", "Error", MB_OK);
-		}
-	}
-	else {
-		if (!encodesfbbfile(rotatedImage, height, width, inputPath.c_str())) {
-			MessageBox(hwnd, "Failed to save rotated SFBB image.", "Error", MB_OK);
-		}
+	if (!stbi_write_png(inputPath.c_str(), height, width, channels, rotatedImage, 0)) {
+		MessageBox(hwnd, "Failed to save rotated Standard image.", "Error", MB_OK);
 	}
 
 	// Clean up memory
@@ -758,8 +474,7 @@ int getXbuttonID(POINT mPos) {
 	return (mPos.y > toolheight || mPos.y < 2 || mPos.x < 2) ? -1 : x / interval;
 }
 
-//********************************************
-// Here is where the program begins
+
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
 
 	int argc;
@@ -846,7 +561,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 			else {
 				scaler = mscaler;
 			}
-			*/
+			
 
 		}
 
@@ -862,6 +577,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	return 0;
 }
 
+
 const char* FileOpenDialog(HWND hwnd) {
 	OPENFILENAME ofn = { 0 };
 	TCHAR szFile[260] = { 0 };
@@ -870,7 +586,7 @@ const char* FileOpenDialog(HWND hwnd) {
 	ofn.hwndOwner = hwnd;
 	ofn.lpstrFile = szFile;
 	ofn.nMaxFile = sizeof(szFile);
-	ofn.lpstrFilter = "Supported Images (*.sfbb *.jpeg *.jpg *.png *.tga *.bmp *.psd; .gif; .hdr; .pic; .pnm)\0*.sfbb;*.jpeg;*.jpg;*.png;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0SFBB (*.sfbb) only\0*.sfbb";
+	ofn.lpstrFilter = "Supported Images (*.jpeg *.jpg *.png *.tga *.bmp *.psd; .gif; .hdr; .pic; .pnm)\0*.jpeg;*.jpg;*.png;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm";
 	ofn.nFilterIndex = 1;
 	ofn.lpstrFileTitle = NULL;
 	ofn.nMaxFileTitle = 0;
@@ -882,141 +598,6 @@ const char* FileOpenDialog(HWND hwnd) {
 	}
 
 	return 0;
-}
-
-
-// Gaussian function
-double gaussian(double x, double sigma) {
-	return exp(-(x * x) / (2 * sigma * sigma)) / (sqrt(2 * 3.14159265) * sigma);
-}
-
-
-// Gaussian blur function
-void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t offX = 0, uint32_t offY = 0) {
-	// Compute kernel size
-	int kernel_size = (int)ceil(sigma * 3) * 2 + 1;
-
-	// Allocate kernel array
-	double* kernel = (double*)malloc(kernel_size * sizeof(double));
-
-	// Compute kernel values
-	double sum = 0.0;
-	int i;
-	for (i = 0; i < kernel_size; i++) {
-		double x = (double)i - (double)(kernel_size - 1) / 2.0;
-		kernel[i] = gaussian(x, sigma);
-		sum += kernel[i];
-	}
-
-	// Normalize kernel
-	for (i = 0; i < kernel_size; i++) {
-		kernel[i] /= sum;
-	}
-
-	// Allocate temporary row array
-	uint32_t* row = (uint32_t*)malloc(width * sizeof(uint32_t));
-
-	// Blur horizontally
-	int x, y;
-	for (y = 0; y < lH; y++) {
-		for (x = 0; x < lW; x++) {
-			int k;
-			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0;
-			for (k = 0; k < kernel_size; k++) {
-				int xk = x - (kernel_size - 1) / 2 + k;
-				if (xk >= 0 && xk < width) {
-					uint32_t pixel = pixels[(y + offY) * width + (xk + offX)];
-					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
-					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
-					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
-				}
-			}
-			row[x] = ((uint32_t)(sum_r + 0.5) << 16) |
-				((uint32_t)(sum_g + 0.5) << 8) |
-				((uint32_t)(sum_b + 0.5));
-		}
-		// Copy row back into pixels array
-		for (x = 0; x < lW; x++) {
-			pixels[(y + offY) * width + (x + offX)] = row[x];
-		}
-	}
-
-	// Blur vertically
-	for (x = 0; x < lW; x++) {
-		for (y = 0; y < lH; y++) {
-			int k;
-			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0;
-			for (k = 0; k < kernel_size; k++) {
-				int yk = y - (kernel_size - 1) / 2 + k;
-				if (yk >= 0 && yk < lH) {
-					uint32_t pixel = pixels[(yk + offY) * width + (x + offX)];
-					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
-					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
-					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
-				}
-			}
-			row[y] = ((uint32_t)(sum_r + 0.5) << 16) |
-				((uint32_t)(sum_g + 0.5) << 8) |
-				((uint32_t)(sum_b + 0.5));
-		}
-		// Copy row back into pixels array
-		for (y = 0; y < lH; y++) {
-			pixels[(offY + y) * width + (offX + x)] = row[y];
-		}
-	}
-
-	// Free memory
-	free(kernel);
-	free(row);
-}
-
-
-uint32_t* bilinear_scale(const uint32_t* input_buffer, const int input_width, const int input_height,
-	const float scale_factor, int& output_width, int& output_height) {
-
-	// Calculate the output dimensions
-	output_width = std::round(input_width * scale_factor);
-	output_height = std::round(input_height * scale_factor);
-
-	// Allocate memory for the output buffer
-	uint32_t* output_buffer = new uint32_t[output_width * output_height];
-
-	// Iterate over each pixel in the output buffer
-	for (int y = 0; y < output_height; y++) {
-		for (int x = 0; x < output_width; x++) {
-
-			// Calculate the corresponding pixel in the input buffer
-			float input_x = x / scale_factor;
-			float input_y = y / scale_factor;
-
-			// Calculate the four nearest pixels in the input buffer
-			int x1 = std::floor(input_x);
-			int x2 = std::ceil(input_x);
-			int y1 = std::floor(input_y);
-			int y2 = std::ceil(input_y);
-
-			// Get the color of each of the four nearest pixels
-			uint32_t c1 = input_buffer[y1 * input_width + x1];
-			uint32_t c2 = input_buffer[y1 * input_width + x2];
-			uint32_t c3 = input_buffer[y2 * input_width + x1];
-			uint32_t c4 = input_buffer[y2 * input_width + x2];
-
-			// Calculate the weights of each of the four nearest pixels
-			float w1 = (x2 - input_x) * (y2 - input_y);
-			float w2 = (input_x - x1) * (y2 - input_y);
-			float w3 = (x2 - input_x) * (input_y - y1);
-			float w4 = (input_x - x1) * (input_y - y1);
-
-			// Calculate the final color of the output pixel
-			uint32_t final_color = (uint32_t)(w1 * c1 + w2 * c2 + w3 * c3 + w4 * c4);
-
-			// Set the output pixel color in the output buffer
-			output_buffer[y * output_width + x] = final_color;
-		}
-	}
-
-	// Return the output buffer
-	return output_buffer;
 }
 
 
@@ -1201,7 +782,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 				break;
 			case 1:
 				// save
-				txt = "Save as SFBB";
+				txt = "Save Image";
 				break;
 			case 2:
 				// zoom in
@@ -1236,7 +817,7 @@ void RedrawImageOnBitmap(HWND hwnd) {
 			//gaussian_blur((uint32_t*)scrdata, 40, 40, 2.0f, loc+5, toolheight+6)
 			gaussian_blur((uint32_t*)scrdata, (txt.length() * 8) + 10, 18, 4.0f, width, loc, toolheight + 5);
 			//dDrawRectangle(scrdata, width, loc, toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
-			dDrawFilledRectangle(scrdata, width, loc, toolheight+5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
+			dDrawFilledRectangle(scrdata, width, loc, toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
 			dDrawRoundedRectangle(scrdata, width, loc - 1, toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
 			//RenderString(txt.c_str(), loc + 5, toolheight + 10, 0xFFFFFF);
 			RenderStringFancy(txt.c_str(), loc + 4, toolheight + 2, 0xFFFFFF, scrdata);
@@ -1289,30 +870,9 @@ int SaveImage() {
 	return 0;
 }
 
-int SaveSFBB(HWND hwnd) {
-
-	int s = MessageBox(hwnd, "Do you want to save this file as an SFBB? File will be saved in the current directory.", "Convert to SFBB?", MB_YESNO);
-	if (s == IDYES) {
-		if (imgwidth == 0) {
-			MessageBox(hwnd, "There is no image open", "No image", MB_OK);
-			return 0;
-		}
-		if (!standardFomat) {
-			MessageBox(hwnd, "Image is not in a standard format or already in SFBB format.", "Already in SFBB Format", MB_OK);
-			return 0;
-		}
-		bool w = encodeimage(filepath);
-		if (w) {
-			MessageBox(hwnd, "Saved", "Saved", MB_OK);
-		}
-		else {
-			MessageBox(hwnd, "Save Failed", "Save Failed", MB_OK);
-		}
-	}
-	return 1;
-}
 
 void NewZoom(HWND hwnd, float v, int mouse) {
+
 	POINT p;
 	GetCursorPos(&p);
 	ScreenToClient(hwnd, &p);
@@ -1334,6 +894,7 @@ void NewZoom(HWND hwnd, float v, int mouse) {
 		ilocY = p.y + distance_y * v;
 	}
 	mscaler *= v;
+	mscaler = roundzoom(mscaler);
 
 	RedrawImageOnBitmap(hwnd);
 }
@@ -1372,9 +933,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			return 0;
 		case 1:
 			// save
-			if (!SaveSFBB(hwnd)) {
-				return 0;
-			}
+
 			return 0;
 		case 2:
 			// zoom in
@@ -1574,12 +1133,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			}
 
 		}
-		if (wparam == 'Z') {
-			if (!SaveSFBB(hwnd)) {
-				return 0;
-			}
-		}
-
 		if (wparam == 'F') {
 			PrepareOpenImage(hwnd);
 		}
@@ -1646,6 +1199,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			v = 0.8f;
 		}
 
+
 		NewZoom(hwnd, v, true);
 
 		break;
@@ -1672,3 +1226,4 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
 name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+*/
