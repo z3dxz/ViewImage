@@ -163,6 +163,9 @@
     <Image Include="sfbb_icon.ico" />
     <Image Include="txt_atlas.png" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="readme.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
