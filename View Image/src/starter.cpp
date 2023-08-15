@@ -31,7 +31,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
 
 	const char* CLASS_NAME = "ImageViewerClass";
-	const char* WINDOW_NAME = "View Image";
+	const char* WINDOW_NAME = "View Image (Loading)";
 
 	WNDCLASSEX wc = { 0 };
 
@@ -117,12 +117,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_GETMINMAXINFO:
 	{
-		/*
+		
 		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lparam;
 		lpMMI->ptMinTrackSize.x = 340;
-		lpMMI->ptMinTrackSize.y = toolheight + 70;
+		lpMMI->ptMinTrackSize.y = 40 + 70;
 		
-		*/
+		
 		break;
 	}
 	case WM_LBUTTONDOWN:

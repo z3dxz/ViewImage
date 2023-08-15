@@ -131,17 +131,25 @@ float roundzoom(float z) {
 
 void no_offset(GlobalParams* m) {
 	m->iLocX = 0;
-	m->iLocY = m->toolheight / 2;
+	if (!m->fullscreen) {
+		m->iLocY = m->toolheight / 2;
+	}
+	else {
+		m->iLocY = 0;
+	}
 
 	RedrawImageOnBitmap(m);
 }
 
 void autozoom(GlobalParams* m) {
 
+	int toolheight0 = 0;
+	if (!m->fullscreen) { toolheight0 = m->toolheight; }
+
 	no_offset(m);
 
 	float precentX = (float)m->width / (float)m->imgwidth;
-	float precentY = (float)(m->height - m->toolheight) / (float)m->imgheight;
+	float precentY = (float)(m->height - toolheight0) / (float)m->imgheight;
 
 	float e = fmin(precentX, precentY);
 

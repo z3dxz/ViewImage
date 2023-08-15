@@ -135,9 +135,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath) {
 						shExInfo.nShow = SW_NORMAL;
 						if (ShellExecuteEx(&shExInfo)) {
 							int k = m->width;
-							m->halt = true;
 							WaitForSingleObject(shExInfo.hProcess, INFINITE);
-							m->halt = false;
 							//Sleep(1);
 							m->imgdata = GetStandardBitmap(m, "D:\\_f_.png", &m->imgwidth, &m->imgheight);
 							// Close the process handle
@@ -161,7 +159,12 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath) {
 
 	if (!m->imgdata) {
 		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK);
-		exit(0);
+		if (m->imgdata) {
+			free(m->imgdata);
+		}
+		m->imgwidth = 0;
+		m->imgheight = 0;
+
 	}
 
 	// Auto-zoom
@@ -204,4 +207,5 @@ void PrepareOpenImage(GlobalParams* m) {
 		m->imgwidth = 0;
 		OpenImageFromPath(m, res);
 	}
+	m->shouldSaveShutdown = false;
 }

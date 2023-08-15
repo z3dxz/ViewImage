@@ -254,20 +254,21 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			RedrawImageOnBitmap(m);
 		}
 		else {
+			m->fullscreen = true;
 			SetWindowLong(m->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
 			int screenX = GetSystemMetrics(SM_CXSCREEN);
 			int screenY = GetSystemMetrics(SM_CYSCREEN);
 			GetWindowPlacement(m->hwnd, &m->wpPrev);
 			SetWindowPos(m->hwnd, 0, 0, 0, screenX, screenY, 0);
-			m->fullscreen = true;
 			RedrawImageOnBitmap(m);
 		}
 	}
 
 	if (wparam == VK_RIGHT) {
-		if (!m->loading) {
+		if (!m->loading && !m->halt) {
 			m->halt = true;
 			m->loading = true;
+
 			const char* mpath = m->fpath.c_str();
 
 			std::string k = GetNextFilePath(mpath);
@@ -335,6 +336,8 @@ void Size(GlobalParams* m) {
 		free(m->scrdata);
 
 		m->scrdata = malloc(m->width * m->height * 4);
+
+		autozoom(m);
 
 		RedrawImageOnBitmap(m);
 	}

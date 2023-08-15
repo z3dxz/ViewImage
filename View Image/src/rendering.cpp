@@ -306,7 +306,10 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 		}
 	}
 
-	RenderStringFancy(m, "v2.0", 330, 10, 0xFFFFFF, m->scrdata);
+	InitFont(m->hwnd, "C:\\Windows\\Fonts\\tahoma.ttf", 10);
+	RenderStringFancy(m, "v2.0", m->width-30, 20, 0x808080, m->scrdata);
+	InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
+
 	if (m->loading) {
 		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 20);
 		RenderStringFancy(m, "Loading", 12, m->toolheight + 12, 0x000000, m->scrdata);
@@ -323,7 +326,7 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 	}
 	else {
 
-		sprintf(str, "View Image");
+		sprintf(str, "View Image | Press F or click a button to begin");
 	}
 
 	SetWindowText(m->hwnd, str);
