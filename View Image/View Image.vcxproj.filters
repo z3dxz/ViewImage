@@ -85,7 +85,4 @@
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
-  <ItemGroup>
-    <Text Include="readme.txt" />
-  </ItemGroup>
 </Project>
