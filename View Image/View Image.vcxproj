@@ -158,6 +158,7 @@
     <ResourceCompile Include="View Image.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="checkerboard_pattern.png" />
     <Image Include="iconbar.png" />
     <Image Include="sfbb_icon.ico" />
     <Image Include="txt_atlas.png" />

@@ -49,7 +49,7 @@ uint32_t lerp(uint32_t color1, uint32_t color2, float alpha);
 // Gaussian function
 double gaussian(double x, double sigma);
 
-
+void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize);
 // Gaussian blur function
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t offX = 0, uint32_t offY = 0);
 

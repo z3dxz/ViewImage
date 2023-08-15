@@ -221,6 +221,92 @@ double gaussian(double x, double sigma) {
 	return exp(-(x * x) / (2 * sigma * sigma)) / (sqrt(2 * 3.14159265) * sigma);
 }
 
+void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize) {
+	uint32_t halfKernel = kernelSize / 2;
+
+	// Compute integral image
+	uint32_t* integralR = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+	uint32_t* integralG = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+	uint32_t* integralB = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+
+	for (uint32_t y = 0; y < height; ++y) {
+		for (uint32_t x = 0; x < width; ++x) {
+			uint32_t pixel = mem[y * width + x];
+			uint32_t r = (pixel >> 16) & 0xFF;
+			uint32_t g = (pixel >> 8) & 0xFF;
+			uint32_t b = pixel & 0xFF;
+
+			uint32_t sumR = r;
+			uint32_t sumG = g;
+			uint32_t sumB = b;
+
+			if (x > 0) {
+				sumR += integralR[y * width + x - 1];
+				sumG += integralG[y * width + x - 1];
+				sumB += integralB[y * width + x - 1];
+			}
+			if (y > 0) {
+				sumR += integralR[(y - 1) * width + x];
+				sumG += integralG[(y - 1) * width + x];
+				sumB += integralB[(y - 1) * width + x];
+			}
+			if (x > 0 && y > 0) {
+				sumR -= integralR[(y - 1) * width + x - 1];
+				sumG -= integralG[(y - 1) * width + x - 1];
+				sumB -= integralB[(y - 1) * width + x - 1];
+			}
+
+			integralR[y * width + x] = sumR;
+			integralG[y * width + x] = sumG;
+			integralB[y * width + x] = sumB;
+		}
+	}
+
+	// Compute blurred image using integral images
+	for (uint32_t y = 0; y < height; ++y) {
+		for (uint32_t x = 0; x < width; ++x) {
+			uint32_t startX = x >= halfKernel ? x - halfKernel : 0;
+			uint32_t startY = y >= halfKernel ? y - halfKernel : 0;
+			uint32_t endX = x + halfKernel < width ? x + halfKernel : width - 1;
+			uint32_t endY = y + halfKernel < height ? y + halfKernel : height - 1;
+
+			uint32_t count = (endX - startX + 1) * (endY - startY + 1);
+			uint32_t sumR = integralR[endY * width + endX];
+			uint32_t sumG = integralG[endY * width + endX];
+			uint32_t sumB = integralB[endY * width + endX];
+
+			if (startX > 0) {
+				sumR -= integralR[endY * width + startX - 1];
+				sumG -= integralG[endY * width + startX - 1];
+				sumB -= integralB[endY * width + startX - 1];
+			}
+			if (startY > 0) {
+				sumR -= integralR[startY * width + endX];
+				sumG -= integralG[startY * width + endX];
+				sumB -= integralB[startY * width + endX];
+			}
+			if (startX > 0 && startY > 0) {
+				sumR += integralR[startY * width + startX - 1];
+				sumG += integralG[startY * width + startX - 1];
+				sumB += integralB[startY * width + startX - 1];
+			}
+
+			uint32_t avgR = sumR / count;
+			uint32_t avgG = sumG / count;
+			uint32_t avgB = sumB / count;
+
+			mem[y * width + x] = (avgR << 16) | (avgG << 8) | avgB;
+		}
+	}
+
+	free(integralR);
+	free(integralG);
+	free(integralB);
+}
+
+
+
+
 
 // Gaussian blur function
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t offX, uint32_t offY) {

@@ -144,11 +144,14 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 
 			int margin = 2;
 			if (ptx < m->imgwidth && pty < m->imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
-				uint32_t c = *GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth);
+				uint32_t c = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth));
 
 				int alpha = (c >> 24) & 255;
-
-				*GetMemoryLocation(m->scrdata, x, y, m->width) = lerp(bkc, InvertColorChannels(c), ((float)alpha / 255.0f));
+				uint32_t doColor = c;
+				if (alpha != 255) {
+					doColor = lerp(bkc, c, ((float)alpha / 255.0f));
+				}
+				*GetMemoryLocation(m->scrdata, x, y, m->width) = doColor;
 
 			}
 			else {
@@ -182,12 +185,14 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 
 		//BLUR FOR TOOLBAR
 		if ((GetKeyState('N') & 0x8000) && (GetKeyState('M') & 0x8000)) {
-
-			gaussian_blur((uint32_t*)m->scrdata, m->width, m->height, 4.0, m->width);
+			//gaussianBlur2((uint32_t*)m->scrdata, m->width, m->height, 5, 5, 200, 50, 2.0f);
+			boxBlur((uint32_t*)m->scrdata, m->width, m->height, 20);
+			//gaussian_blur((uint32_t*)m->scrdata, m->width, m->height, 4.0, m->width);
 		}
 		else if (m->CoordTop <= m->toolheight) {
 
-			gaussian_blur((uint32_t*)m->scrdata, m->width, m->toolheight, 4.0, m->width);
+			boxBlur((uint32_t*)m->scrdata, m->width, m->toolheight, 20);
+			//gaussian_blur((uint32_t*)m->scrdata, m->width, m->toolheight, 4.0, m->width);
 		}
 		else {
 
@@ -314,7 +319,9 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 				break;
 			}
 			int loc = 1 + (m->selectedbutton * GetButtonInterval(m) + 2);
-			gaussian_blur((uint32_t*)m->scrdata, (txt.length() * 8) + 10, 18, 4.0f, m->width, loc, m->toolheight + 5);
+
+			//gaussian_blur((uint32_t*)m->scrdata, (txt.length() * 8) + 10, 18, 4.0f, m->width, loc, m->toolheight + 5);
+
 			dDrawFilledRectangle(m->scrdata, m->width, loc, m->toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
 			dDrawRoundedRectangle(m->scrdata, m->width, loc - 1, m->toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
 			RenderStringFancy(m, txt.c_str(), loc + 4, m->toolheight + 2, 0xFFFFFF, m->scrdata);

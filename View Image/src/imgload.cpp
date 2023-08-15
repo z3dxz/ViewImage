@@ -161,14 +161,16 @@ std::string FileOpenDialog(HWND hwnd) {
 
 void PrepareSaveImage(GlobalParams* m) {
 	std::string res = FileSaveDialog(m->hwnd);
-
-	stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
+	if (res != "Invalid") {
+		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
+	}
 
 }
 
 void PrepareOpenImage(GlobalParams* m) {
 	std::string res = FileOpenDialog(m->hwnd);
-	m->imgwidth = 0;
-	OpenImageFromPath(m, res);
-	
+	if (res != "Invalid") {
+		m->imgwidth = 0;
+		OpenImageFromPath(m, res);
+	}
 }
