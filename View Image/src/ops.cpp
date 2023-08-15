@@ -105,7 +105,7 @@ void rotateImage90Degrees(GlobalParams* m) {
 
 	// Update pointer to point to rotated image
 	m->imgdata = rotatedImage;
-
+	m->shouldSaveShutdown = true;
 	RedrawImageOnBitmap(m);
 }
 

@@ -40,8 +40,61 @@ void ShowMessageBox(const std::string& message) {
 }
 
 
+std::string FileSaveDialog(HWND hwnd) {
+	OPENFILENAME ofn;
+	TCHAR szFile[260] = { 0 };
+	ZeroMemory(&ofn, sizeof(OPENFILENAME));
+	ofn.lStructSize = sizeof(OPENFILENAME);
+	ofn.hwndOwner = NULL;
+	ofn.lpstrFilter = "PNG Files (*.png)\0*.png\0All Files (*.*)\0*.*\0";
+	ofn.lpstrFile = szFile;
+	ofn.nMaxFile = MAX_PATH;
+	ofn.lpstrDefExt = "png";
+	ofn.lpstrTitle = "Save as a PNG File";
+	ofn.Flags = OFN_OVERWRITEPROMPT;
+
+	if (GetSaveFileName(&ofn)) {
+		std::string selectedPath = ofn.lpstrFile;
+		return selectedPath;
+	}
+	return "Invalid";
+}
+
+void PrepareSaveImage(GlobalParams* m) {
+	std::string res = FileSaveDialog(m->hwnd);
+	if (res != "Invalid") {
+
+		m->loading = true;
+		RedrawImageOnBitmap(m);
+		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
+
+		m->loading = false;
+		RedrawImageOnBitmap(m);
+	}
+
+}
+
+
 bool OpenImageFromPath(GlobalParams* m, std::string kpath) {
 	
+	
+	m->loading = true;
+	RedrawImageOnBitmap(m);
+
+
+	if (m->shouldSaveShutdown == true) {
+		int msgboxID = MessageBox(m->hwnd, "Would you like to save changes to the image", "Are you sure?", MB_YESNOCANCEL);
+		if (msgboxID == IDYES) {
+			PrepareSaveImage(m);
+		}
+		else if(msgboxID == IDNO){
+			// do it anyway
+
+		}
+		else {
+			return false;
+		}
+	}
 	
 	m->fpath = kpath;
 	
@@ -114,28 +167,14 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath) {
 	// Auto-zoom
 	autozoom(m);
 
+	m->shouldSaveShutdown = false;
+
+	m->loading = false;
+
+	RedrawImageOnBitmap(m);
 	return true;
 }
 
-std::string FileSaveDialog(HWND hwnd) {
-	OPENFILENAME ofn;
-	TCHAR szFile[260] = {0};
-	ZeroMemory(&ofn, sizeof(OPENFILENAME));
-	ofn.lStructSize = sizeof(OPENFILENAME);
-	ofn.hwndOwner = NULL;
-	ofn.lpstrFilter = "PNG Files (*.png)\0*.png\0All Files (*.*)\0*.*\0";
-	ofn.lpstrFile = szFile;
-	ofn.nMaxFile = MAX_PATH;
-	ofn.lpstrDefExt = "png";
-	ofn.lpstrTitle = "Save as a PNG File";
-	ofn.Flags = OFN_OVERWRITEPROMPT;
-
-	if (GetSaveFileName(&ofn)) {
-		std::string selectedPath = ofn.lpstrFile;
-		return selectedPath;
-	}
-	return "Invalid";
-}
 
 std::string FileOpenDialog(HWND hwnd) {
 	OPENFILENAME ofn = { 0 };
@@ -157,14 +196,6 @@ std::string FileOpenDialog(HWND hwnd) {
 	}
 
 	return std::string("Invalid");
-}
-
-void PrepareSaveImage(GlobalParams* m) {
-	std::string res = FileSaveDialog(m->hwnd);
-	if (res != "Invalid") {
-		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
-	}
-
 }
 
 void PrepareOpenImage(GlobalParams* m) {

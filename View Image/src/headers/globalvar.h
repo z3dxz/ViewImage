@@ -34,6 +34,10 @@ struct GlobalParams {
 
 	// current state
 
+	bool shouldSaveShutdown = false;
+
+	bool loading = false;
+
 	bool halt = false;
 
 	bool mouseDown = false;
@@ -55,6 +59,8 @@ struct GlobalParams {
 		int lockimgoffy;
 		POINT LockmPos;
 		bool isSize;
+		int lastMouseX;
+		int lastMouseY;
 
 	bool fullscreen = false;
 	WINDOWPLACEMENT wpPrev;

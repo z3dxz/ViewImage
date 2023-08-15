@@ -1,5 +1,6 @@
 
 #include "headers/rendering.h"
+#include <vector>
 
 // Freetype Globals
 FT_Library ft;
@@ -20,6 +21,18 @@ bool InitFont(HWND hwnd, const char* font, int size) {
 	FT_Set_Pixel_Sizes(face, 0, size);
 
 }
+
+const char* strtable[] {
+	"Open Image",
+	"Save as PNG",
+	"Zoom In",
+	"Zoom Out",
+	"Zoom Auto",
+	"Zoom 1:1 (100%)",
+	"Rotate",
+	"DELETE image",
+	"Information"
+};
 
 int RenderStringFancy(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
 
@@ -73,7 +86,12 @@ void dDrawFilledRectangle(void* mem, int kwidth, int xloc, int yloc, int width, 
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth);
-			*ma = lerp(*ma, color, opacity);
+			if (opacity < 0.99f) {
+				*ma = lerp(*ma, color, opacity);
+			}
+			else {
+				*ma = color;
+			}
 		}
 	}
 }
@@ -83,7 +101,12 @@ void dDrawRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int he
 		for (int x = 0; x < width; x++) {
 			if (x < 1 || x > width - 2 || y < 1 || y > height - 2) {
 				uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth);
-				*ma = lerp(*ma, color, opacity);
+				if (opacity < 0.99f) {
+					*ma = lerp(*ma, color, opacity);
+				}
+				else {
+					*ma = color;
+				}
 			}
 		}
 	}
@@ -95,8 +118,12 @@ void dDrawRoundedRectangle(void* mem, int kwidth, int xloc, int yloc, int width,
 			uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth);
 			if (x < 1 || x > width - 2 || y < 1 || y > height - 2) {
 				if (!(x == 0 && y == 0) && !(x == width - 1 && y == height - 1) && !(x == width - 1 && y == 0) && !(x == 0 && y == height - 1)) {
-
-					*ma = lerp(*ma, color, opacity);
+					if (opacity < 0.99f) {
+						*ma = lerp(*ma, color, opacity);
+					}
+					else {
+						*ma = color;
+					}
 				}
 			}
 		}
@@ -243,7 +270,8 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 
 
 					uint32_t l = (*GetMemoryLocation(m->toolbarData, x + k, y, m->widthos));
-					float ll = (float)((l & 0x00FF0000) >> 16) / 255.0f;
+					int l0 = ((l & 0x00FF0000) >> 16);
+					float ll = (float)l0 / 255.0f;
 					uint32_t* memoryPath = GetMemoryLocation(m->scrdata, p + x, 6 + y, m->width); \
 						if (i != m->selectedbutton) {
 							*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * 0.7f); // transparency
@@ -259,76 +287,32 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 		if (m->selectedbutton >= 0 && m->selectedbutton < m->maxButtons) {
 			// rounded corners: split hover thing into three things
 
+			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton* GetButtonInterval(m) + 2)+1, 4, GetButtonInterval(m)-2, 1, 0xFF8080, 0.2f);
+			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton* GetButtonInterval(m) + 2), 5, GetButtonInterval(m), m->toolheight - 10, 0xFF8080, 0.2f);
+			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton* GetButtonInterval(m) + 2) + 1, (m->toolheight - 5), GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
 
-			for (uint32_t y = 0; y < 1; y++) {
-				for (uint32_t x = 0; x < GetButtonInterval(m) - 2; x++) {
-					uint32_t* memoryPath = GetMemoryLocation(m->scrdata, x + 1 + (m->selectedbutton * GetButtonInterval(m) + 2), y + 4, m->width);
-					*memoryPath = lerp(*memoryPath, 0xFF8080, 0.2f);
-				}
-			}
-			for (uint32_t y = 0; y < m->toolheight - 10; y++) {
-				for (uint32_t x = 0; x < GetButtonInterval(m); x++) {
-					uint32_t* memoryPath = GetMemoryLocation(m->scrdata, x + (m->selectedbutton * GetButtonInterval(m) + 2), y + 5, m->width);
-					*memoryPath = lerp(*memoryPath, 0xFF8080, 0.2f);
-				}
-			}
-			for (uint32_t y = 0; y < 1; y++) {
-				for (uint32_t x = 0; x < GetButtonInterval(m) - 2; x++) {
-					uint32_t* memoryPath = GetMemoryLocation(m->scrdata, x + 1 + (m->selectedbutton * GetButtonInterval(m) + 2), y + (m->toolheight - 5), m->width);
-					*memoryPath = lerp(*memoryPath, 0xFF8080, 0.2f);
-				}
+
+
+			std::string txt = "Error";
+			if (m->selectedbutton < m->maxButtons) {
+				txt = strtable[m->selectedbutton];
 			}
 
-			std::string txt = "M";
-			switch (m->selectedbutton) {
-			case 0:
-				// open
-				txt = "Open";
-				break;
-			case 1:
-				// save
-				txt = "Save as PNG";
-				break;
-			case 2:
-				// zoom in
-				txt = "Zoom In";
-				break;
-			case 3:
-				// zoom out
-				txt = "Zoom Out";
-				break;
-			case 4:
-				// zoom fit
-				txt = "Zoom Auto";
-				break;
-			case 5:
-				// zoom original
-				txt = "Zoom 1:1 (100%)";
-				break;
-			case 6:
-				// rotate
-				txt = "Rotate";
-				break;
-			case 7:
-				// delete
-				txt = "DELETE image";
-				break;
-			case 8:
-				// info
-				txt = "Information";
-				break;
-			}
 			int loc = 1 + (m->selectedbutton * GetButtonInterval(m) + 2);
 
-			//gaussian_blur((uint32_t*)m->scrdata, (txt.length() * 8) + 10, 18, 4.0f, m->width, loc, m->toolheight + 5);
-
-			dDrawFilledRectangle(m->scrdata, m->width, loc, m->toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.4f);
+			dDrawFilledRectangle(m->scrdata, m->width, loc, m->toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.8f);
 			dDrawRoundedRectangle(m->scrdata, m->width, loc - 1, m->toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
 			RenderStringFancy(m, txt.c_str(), loc + 4, m->toolheight + 2, 0xFFFFFF, m->scrdata);
 		}
 	}
 
 	RenderStringFancy(m, "v2.0", 330, 10, 0xFFFFFF, m->scrdata);
+	if (m->loading) {
+		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 20);
+		RenderStringFancy(m, "Loading", 12, m->toolheight + 12, 0x000000, m->scrdata);
+		RenderStringFancy(m, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata);
+		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
+	}
 
 	// Update window title
 

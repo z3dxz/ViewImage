@@ -1,6 +1,7 @@
 #include "headers/events.h" // e
 #include "../resource.h"
 #include <Shlwapi.h>
+#include <vector>
 
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 
@@ -122,6 +123,9 @@ bool ToolbarMouseDown(GlobalParams* m) {
 }
 
 void MouseDown(GlobalParams* m) {
+
+	m->lastMouseX = -1;
+	m->lastMouseY = -1;
 	m->lockimgoffx = m->iLocX;
 	m->lockimgoffy = m->iLocY;
 	GetCursorPos(&m->LockmPos);
@@ -133,33 +137,68 @@ void MouseDown(GlobalParams* m) {
 	}
 }
 
+
+POINT* sampleLine(double x1, double y1, double x2, double y2, int numSamples) {
+	POINT* samples = (POINT*)malloc(sizeof(POINT) * numSamples);
+
+	for (int i = 0; i < numSamples; i++) {
+		double t = (double)i / (numSamples - 1);
+		samples[i].x = x1 + t * (x2 - x1);
+		samples[i].y = y1 + t * (y2 - y1);
+	}
+
+	return samples;
+}
+
+
 void MouseMove(GlobalParams* m) {
 	POINT pos = { 0 };
 	GetCursorPos(&pos);
 	if (m->mouseDown) {
 
 		if (GetKeyState('G') & 0x8000) {
+
+
 			ScreenToClient(m->hwnd, &pos);
-			int k = (int)((float)(pos.x - m->CoordLeft) * (1.0f / m->mscaler));
-			int v = (int)((float)(pos.y - m->CoordTop) * (1.0f / m->mscaler));
-			// drawing
-			int size = (float)m->imgheight * 0.05f;
-			int halfsize = size / 2;
 
-			for (int y = 0; y < size; y++) {
-				for (int x = 0; x < size; x++) {
-					double yes = pow(x - halfsize, 2) + pow(y - halfsize, 2);
-					if (yes <= pow(halfsize, 2)) {
+			int k = (int)((float)((m->lastMouseX) - m->CoordLeft) * (1.0f / m->mscaler));
+			int v = (int)((float)((m->lastMouseY) - m->CoordTop) * (1.0f / m->mscaler));
 
-						uint32_t xloc = (x - halfsize) + k;
-						uint32_t yloc = (y - halfsize) + v;
-						if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
-							uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth);
-							*memoryPath = lerp(0xFFFF0000, *memoryPath, yes / pow(halfsize, 2)); // transparency
+			int k1 = (int)((float)(pos.x - m->CoordLeft) * (1.0f / m->mscaler));
+			int v1 = (int)((float)(pos.y - m->CoordTop) * (1.0f / m->mscaler));
+
+			if (m->lastMouseX == -1) { k = k1; v = v1; }
+
+			int samples0 = 50;
+
+			POINT* k2 = sampleLine(k1, v1, k, v, samples0);
+
+			for (int i = 0; i < samples0; i++) {
+
+				// drawing
+				int size = ((float)m->imgheight * 0.01f)+5;
+				int halfsize = size / 2;
+
+				for (int y = 0; y < size; y++) {
+					for (int x = 0; x < size; x++) {
+						double yes = pow(x - halfsize, 2) + pow(y - halfsize, 2);
+						if (yes <= pow(halfsize, 2)) {
+
+							uint32_t xloc = (x - halfsize) + (k2[i].x);
+							uint32_t yloc = (y - halfsize) + (k2[i].y);
+							if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
+								uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth);
+								*memoryPath = lerp(*memoryPath, 0xFFFF0000, (yes / pow(halfsize, 2))*0.04f); // transparency
+								m->shouldSaveShutdown = true;
+							}
 						}
 					}
 				}
+
 			}
+
+			m->lastMouseX = pos.x;
+			m->lastMouseY = pos.y;
 
 			RedrawImageOnBitmap(m);
 			return;
@@ -190,11 +229,11 @@ void MouseMove(GlobalParams* m) {
 			}
 		}
 	}
-
 	RedrawImageOnBitmap(m);
 }
 
 void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
+
 	if (m->halt) { return; }
 
 	HWND temp = GetActiveWindow();
@@ -202,7 +241,7 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		return;
 	}
 	if (wparam == 'G') {
-
+		
 	}
 	if (wparam == VK_F11) {
 		if (m->fullscreen) {
@@ -224,19 +263,24 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			RedrawImageOnBitmap(m);
 		}
 	}
+
 	if (wparam == VK_RIGHT) {
-		
+		if (!m->loading) {
+			m->halt = true;
+			m->loading = true;
+			const char* mpath = m->fpath.c_str();
 
-		const char* mpath = m->fpath.c_str();
-		
-		std::string k = GetNextFilePath(mpath);
-		const char* npath = k.c_str();
-		//MessageBox(0, mpath, npath, MB_OKCANCEL);
-		if (k != "No") {
-			OpenImageFromPath(m, npath);
-		}		
-
+			std::string k = GetNextFilePath(mpath);
+			const char* npath = k.c_str();
+			//MessageBox(0, mpath, npath, MB_OKCANCEL);
+			if (k != "No") {
+				OpenImageFromPath(m, npath);
+			}
+			m->loading = false;
+			m->halt = false;
+		}
 	}
+
 	if (wparam == 'F') {
 		PrepareOpenImage(m);
 	}
