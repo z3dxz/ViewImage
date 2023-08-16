@@ -22,7 +22,6 @@ std::string GetPrevFilePath() {
 // come back to fix the issue here with the file paths and crap
 
 std::string GetNextFilePath(const char* file_Path) {
-	kvector.push_back(std::string(file_Path));
 
 	 std::string imagePath = std::string(file_Path);
 	 std::string folderPath = imagePath.substr(0, imagePath.find_last_of("\\/"));
@@ -53,6 +52,8 @@ std::string GetNextFilePath(const char* file_Path) {
 						 {
 							 std::string nextImagePath = folderPath + "\\" + fileName;
 							 FindClose(hFind);
+
+							 kvector.push_back(std::string(file_Path));
 							 return nextImagePath;
 						 }
 					 }

@@ -160,7 +160,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		MouseWheel(&gp, wparam, lparam);
 		break;
 	}
-
+	case WM_CLOSE: {
+		if (doIFSave(&gp)) {
+			DestroyWindow(hwnd);
+		}
+		break;
+	}
 	case WM_DESTROY: {
 		PostQuitMessage(0);
 		return 0;

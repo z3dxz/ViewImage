@@ -70,11 +70,29 @@ void PrepareSaveImage(GlobalParams* m) {
 		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
 
 		m->loading = false;
+		m->shouldSaveShutdown = false;
 		RedrawImageOnBitmap(m);
 	}
 
 }
-
+// the bool is wether or not we should continue or not
+bool doIFSave(GlobalParams* m) {
+	if (m->shouldSaveShutdown == true) {
+		int msgboxID = MessageBox(m->hwnd, "Would you like to save changes to the image", "Are you sure?", MB_YESNOCANCEL);
+		if (msgboxID == IDYES) {
+			PrepareSaveImage(m);
+			return false;
+		}
+		else if (msgboxID == IDNO) {
+			// do it anyway
+			return true; // yes, continue
+		}
+		else {
+			return false; // no, don't continue
+		}
+	}
+	return true;
+}
 
 bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	if (!isLeftRight) {
@@ -84,19 +102,8 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	m->loading = true;
 	RedrawImageOnBitmap(m);
 
-
-	if (m->shouldSaveShutdown == true) {
-		int msgboxID = MessageBox(m->hwnd, "Would you like to save changes to the image", "Are you sure?", MB_YESNOCANCEL);
-		if (msgboxID == IDYES) {
-			PrepareSaveImage(m);
-		}
-		else if(msgboxID == IDNO){
-			// do it anyway
-
-		}
-		else {
-			return false;
-		}
+	if (!doIFSave(m)) {
+		return false;
 	}
 	
 	m->fpath = kpath;
@@ -207,7 +214,7 @@ std::string FileOpenDialog(HWND hwnd) {
 void PrepareOpenImage(GlobalParams* m) {
 	std::string res = FileOpenDialog(m->hwnd);
 	if (res != "Invalid") {
-		m->imgwidth = 0;
+		//m->imgwidth = 0;
 		OpenImageFromPath(m, res, false);
 	}
 	m->shouldSaveShutdown = false;
