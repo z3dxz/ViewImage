@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include <Windows.h>
 
 struct GlobalParams {
@@ -65,4 +66,6 @@ struct GlobalParams {
 	bool fullscreen = false;
 	WINDOWPLACEMENT wpPrev;
 
+	// iterators
+	std::vector<uint32_t> ith, itv;
 };

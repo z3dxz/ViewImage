@@ -37,6 +37,8 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	else {
 		RedrawImageOnBitmap(m);
 	}
+
+	Size(m);
 	
 	return true;
 }
@@ -255,17 +257,31 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		}
 		else {
 			m->fullscreen = true;
-			SetWindowLong(m->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
 			int screenX = GetSystemMetrics(SM_CXSCREEN);
 			int screenY = GetSystemMetrics(SM_CYSCREEN);
 			GetWindowPlacement(m->hwnd, &m->wpPrev);
 			SetWindowPos(m->hwnd, 0, 0, 0, screenX, screenY, 0);
+			SetWindowLong(m->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
 			RedrawImageOnBitmap(m);
 		}
 	}
+	if (wparam == VK_LEFT) {
+		if (!m->loading && !m->halt && m->imgwidth>0) {
+			m->halt = true;
+			m->loading = true;
 
+			std::string k = GetPrevFilePath();
+			const char* npath = k.c_str();
+			//MessageBox(0, mpath, npath, MB_OKCANCEL);
+			if (k != "No") {
+				OpenImageFromPath(m, npath);
+			}
+			m->loading = false;
+			m->halt = false;
+		}
+	}
 	if (wparam == VK_RIGHT) {
-		if (!m->loading && !m->halt) {
+		if (!m->loading && !m->halt && m->imgwidth > 0) {
 			m->halt = true;
 			m->loading = true;
 
@@ -336,6 +352,14 @@ void Size(GlobalParams* m) {
 		free(m->scrdata);
 
 		m->scrdata = malloc(m->width * m->height * 4);
+
+		m->ith.resize(m->width);
+		m->itv.resize(m->height);
+
+		for (uint32_t i = 0; i < m->width; i++)
+			m->ith[i] = i;
+		for (uint32_t i = 0; i < m->height; i++)
+			m->itv[i] = i;
 
 		autozoom(m);
 

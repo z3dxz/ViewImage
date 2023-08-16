@@ -1,6 +1,7 @@
 
 #include "headers/rendering.h"
 #include <vector>
+#include <thread>
 
 // Freetype Globals
 FT_Library ft;
@@ -144,51 +145,64 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 	}
 
 	// render the image
+	// MULTITHREADING!!!!!
+	// https://www.youtube.com/watch?v=46ddlUImiQA
+
+	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(),
+		[&](uint32_t y) {
+			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
+			[&](uint32_t x) {
+					uint32_t bkc{};
+					// bkc
+					if (((x / 10) + (y / 10)) % 2 == 0) {
+						bkc = 0x161616;
+					}
+					else {
+						bkc = 0x0C0C0C;
+					}
+
+					float nscaler = 1.0f / m->mscaler;
+
+					int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2);
+					int32_t offY = (((int32_t)m->height - (int32_t)(m->imgheight * m->mscaler)) / 2);
+
+					offX += m->iLocX;
+					offY += m->iLocY;
+
+
+					int32_t ptx = (x - offX) * nscaler;
+					int32_t pty = (y - offY) * nscaler;
+
+
+					int margin = 2;
+					if (ptx < m->imgwidth && pty < m->imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
+						uint32_t c = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth));
+
+						int alpha = (c >> 24) & 255;
+						uint32_t doColor = c;
+						if (alpha != 255) {
+							doColor = lerp(bkc, c, ((float)alpha / 255.0f));
+						}
+						*GetMemoryLocation(m->scrdata, x, y, m->width) = doColor;
+
+					}
+					else {
+						if (paintBG) {
+							*GetMemoryLocation(m->scrdata, x, y, m->width) = bkc;
+						}
+					}
+				});
+		});
+	/*
+	
 	for (uint32_t y = 0; y < m->height; y++) {
 
 		for (uint32_t x = 0; x < m->width; x++) {
-			uint32_t bkc{};
-			// bkc
-			if (((x / 10) + (y / 10)) % 2 == 0) {
-				bkc = 0x161616;
-			}
-			else {
-				bkc = 0x0C0C0C;
-			}
+	*/
+			
 
-			float nscaler = 1.0f / m->mscaler;
-
-			int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2);
-			int32_t offY = (((int32_t)m->height - (int32_t)(m->imgheight * m->mscaler)) / 2);
-
-			offX += m->iLocX;
-			offY += m->iLocY;
-
-
-			int32_t ptx = (x - offX) * nscaler;
-			int32_t pty = (y - offY) * nscaler;
-
-
-			int margin = 2;
-			if (ptx < m->imgwidth && pty < m->imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
-				uint32_t c = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth));
-
-				int alpha = (c >> 24) & 255;
-				uint32_t doColor = c;
-				if (alpha != 255) {
-					doColor = lerp(bkc, c, ((float)alpha / 255.0f));
-				}
-				*GetMemoryLocation(m->scrdata, x, y, m->width) = doColor;
-
-			}
-			else {
-				if (paintBG) {
-					*GetMemoryLocation(m->scrdata, x, y, m->width) = bkc;
-				}
-			}
-
-		}
-	}
+		//}
+	//}
 
 
 	if (m->imgwidth > 1) {

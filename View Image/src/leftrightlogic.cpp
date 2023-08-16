@@ -1,8 +1,25 @@
 #include "headers/leftrightlogic.h"
 
 #include <shlwapi.h>
+#include <vector>
+
+std::vector<std::string> kvector;
+
+std::string GetPrevFilePath() {
+	
+	if (kvector.size() < 1) {
+		return "No";
+	}
+	std::string k = kvector[kvector.size() - 1];
+	kvector.pop_back();
+	return k;
+}
+
+// come back to fix the issue here with the file paths and crap
 
 std::string GetNextFilePath(const char* file_Path) {
+	kvector.push_back(std::string(file_Path));
+
 	 std::string imagePath = std::string(file_Path);
 	 std::string folderPath = imagePath.substr(0, imagePath.find_last_of("\\/"));
 	 std::string currentFileName = imagePath.substr(imagePath.find_last_of("\\/") + 1);
