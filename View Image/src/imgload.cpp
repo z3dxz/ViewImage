@@ -1,6 +1,7 @@
 #include "headers/imgload.h"
 #include "headers/globalvar.h"
 #include "stb_image.h"
+#include "headers/leftrightlogic.h"
 #include "stb_image_write.h"
 #include "headers/ops.h"
 
@@ -75,8 +76,10 @@ void PrepareSaveImage(GlobalParams* m) {
 }
 
 
-bool OpenImageFromPath(GlobalParams* m, std::string kpath) {
-	
+bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
+	if (!isLeftRight) {
+		clear_kvector();
+	}
 	
 	m->loading = true;
 	RedrawImageOnBitmap(m);
@@ -205,7 +208,7 @@ void PrepareOpenImage(GlobalParams* m) {
 	std::string res = FileOpenDialog(m->hwnd);
 	if (res != "Invalid") {
 		m->imgwidth = 0;
-		OpenImageFromPath(m, res);
+		OpenImageFromPath(m, res, false);
 	}
 	m->shouldSaveShutdown = false;
 }

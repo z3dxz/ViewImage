@@ -5,6 +5,10 @@
 
 std::vector<std::string> kvector;
 
+void clear_kvector() {
+	kvector.clear();
+}
+
 std::string GetPrevFilePath() {
 	
 	if (kvector.size() < 1) {

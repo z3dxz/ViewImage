@@ -28,7 +28,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	
 	
 	if (argc >= 2) {
-		if (!OpenImageFromPath(m, path)) {
+		if (!OpenImageFromPath(m, path, false)) {
 			MessageBox(m->hwnd, "Unable to open image", "Error", MB_OK);
 			exit(0);
 			return false;
@@ -274,7 +274,7 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			const char* npath = k.c_str();
 			//MessageBox(0, mpath, npath, MB_OKCANCEL);
 			if (k != "No") {
-				OpenImageFromPath(m, npath);
+				OpenImageFromPath(m, npath, true);
 			}
 			m->loading = false;
 			m->halt = false;
@@ -291,7 +291,7 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			const char* npath = k.c_str();
 			//MessageBox(0, mpath, npath, MB_OKCANCEL);
 			if (k != "No") {
-				OpenImageFromPath(m, npath);
+				OpenImageFromPath(m, npath, true);
 			}
 			m->loading = false;
 			m->halt = false;
