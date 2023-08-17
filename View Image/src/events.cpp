@@ -349,9 +349,7 @@ void Size(GlobalParams* m) {
 		m->height = ws.bottom - ws.top;
 
 
-		free(m->scrdata);
-
-		m->scrdata = malloc(m->width * m->height * 4);
+		m->scrdata = realloc(m->scrdata, m->width * m->height * 4);
 
 		m->ith.resize(m->width);
 		m->itv.resize(m->height);

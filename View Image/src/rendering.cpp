@@ -147,6 +147,8 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 	// render the image
 	// MULTITHREADING!!!!!
 	// https://www.youtube.com/watch?v=46ddlUImiQA
+
+
 	if (!m->loading) {
 
 		std::for_each(std::execution::par, m->itv.begin(), m->itv.end(),
@@ -220,7 +222,7 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 	POINT p;
 	GetCursorPos(&p);
 	ScreenToClient(m->hwnd, &p);
-
+	
 	if ((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) {
 
 		// Render the toolbar
@@ -321,17 +323,31 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 			RenderStringFancy(m, txt.c_str(), loc + 4, m->toolheight + 2, 0xFFFFFF, m->scrdata);
 		}
 	}
-
+	
+	
+	
+	FT_Done_Face(face);
+	FT_Done_FreeType(ft);
 	InitFont(m->hwnd, "C:\\Windows\\Fonts\\tahoma.ttf", 10);
 	RenderStringFancy(m, "v2.0", m->width-30, 20, 0x808080, m->scrdata);
+
+	FT_Done_Face(face);
+	FT_Done_FreeType(ft);
 	InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
 
 	if (m->loading) {
+
+		FT_Done_Face(face);
+		FT_Done_FreeType(ft);
 		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 20);
 		RenderStringFancy(m, "Loading", 12, m->toolheight + 12, 0x000000, m->scrdata);
 		RenderStringFancy(m, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata);
+
+		FT_Done_Face(face);
+		FT_Done_FreeType(ft);
 		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
 	}
+	
 
 	// Update window title
 
