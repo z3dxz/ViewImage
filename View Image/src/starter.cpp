@@ -92,7 +92,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 				gp.iLocX -= 3;
 				RedrawImageOnBitmap(&gp);
 			}
-			RedrawImageOnBitmap(&gp);
 		}
 
 		MSG msg = { 0 };
