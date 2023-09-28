@@ -373,7 +373,7 @@ void DrawMenu(GlobalParams* m) {
 	}
 
 	for (int i = 0; i < m->menuVector.size(); i++) {
-
+		 
 		std::string mystr = m->menuVector[i].first;
 		if (mystr.length() >= 3 && mystr.substr(mystr.length() - 3) == "{s}") {
 			mystr = mystr.substr(0, mystr.length() - 3);
