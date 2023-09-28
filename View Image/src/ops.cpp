@@ -1,6 +1,8 @@
 #include "headers/ops.h"
 #include "../resource.h"
 
+
+
 #pragma region Memory
 
 #define GetMemoryLocation(start, x, y, widthfactor) \
@@ -36,7 +38,7 @@ unsigned char* LoadImageFromResource(int resourceId, int& width, int& height, in
 	}
 
 	// Find the resource by ID
-	HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(IDB_PNG1), "PNG");
+	HRSRC hResource = FindResource(hModule, MAKEINTRESOURCE(resourceId), "PNG");
 	if (!hResource)
 	{
 		std::cerr << "Failed to find resource " << resourceId << std::endl;
@@ -82,6 +84,70 @@ unsigned char* LoadImageFromResource(int resourceId, int& width, int& height, in
 
 #pragma region Math
 
+HDC GetPrinterDC() {
+	PRINTDLG pd = { sizeof(PRINTDLG) };
+	pd.Flags = PD_RETURNDC;
+
+	if (PrintDlg(&pd)) {
+		return pd.hDC;
+	}
+
+	return NULL;
+}
+
+
+
+void PrintImageToPrinter(uint32_t* image, int width, int height, HDC printerDC) {
+
+	uint32_t* temp = (uint32_t*)malloc(width * height * 4);
+	for (int i = 0; i < width * height; i++) {
+		*(temp+i) = InvertColorChannels((*(image+i)));
+	}
+
+	if (!image) {
+		// Handle loading error
+		return;
+	}
+
+	BITMAPINFO bmpInfo = {};
+	bmpInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmpInfo.bmiHeader.biWidth = width;
+	bmpInfo.bmiHeader.biHeight = -height; // Negative height for top-down DIB
+	bmpInfo.bmiHeader.biPlanes = 1;
+	bmpInfo.bmiHeader.biBitCount = 4 * 8; // Number of bits per pixel
+	bmpInfo.bmiHeader.biCompression = BI_RGB;
+
+	// Start a print job
+	DOCINFO docInfo = {};
+	docInfo.cbSize = sizeof(DOCINFO);
+	docInfo.lpszDocName = TEXT("Image Print");
+	StartDoc(printerDC, &docInfo);
+	StartPage(printerDC);
+
+	// Print the image to the printer
+	StretchDIBits(printerDC, 0, 0, GetDeviceCaps(printerDC, HORZRES), (float)(GetDeviceCaps(printerDC, HORZRES)/width)*height,
+		0, 0, width, height, temp, &bmpInfo, DIB_RGB_COLORS, SRCCOPY);
+
+	// End the print job
+	EndPage(printerDC);
+	EndDoc(printerDC);
+
+	free(temp);
+
+}
+
+void Print(GlobalParams* m) {
+
+	PRINTDLG pd = {};
+	pd.lStructSize = sizeof(PRINTDLG);
+	pd.Flags = PD_RETURNDC | PD_ALLPAGES;
+
+	PrintDlg(&pd);
+
+	// Get the printer device context
+	HDC printerDC = pd.hDC;
+	PrintImageToPrinter((uint32_t*)m->imgdata, m->imgwidth, m->imgheight, printerDC);
+}
 
 void rotateImage90Degrees(GlobalParams* m) {
 	// Update width and height after rotation
@@ -106,7 +172,7 @@ void rotateImage90Degrees(GlobalParams* m) {
 	// Update pointer to point to rotated image
 	m->imgdata = rotatedImage;
 	m->shouldSaveShutdown = true;
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 }
 
 int GetButtonInterval(GlobalParams* m) {
@@ -138,7 +204,7 @@ void no_offset(GlobalParams* m) {
 		m->iLocY = 0;
 	}
 
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 }
 
 void autozoom(GlobalParams* m) {
@@ -159,7 +225,7 @@ void autozoom(GlobalParams* m) {
 	m->mscaler = fzoom;
 	//if (mscaler > 1.0f && imgheight > 5) mscaler = 1.0f;
 
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 }
 
 
@@ -188,7 +254,7 @@ void NewZoom(GlobalParams* m, float v, int mouse) {
 	m->mscaler *= v;
 	m->mscaler = roundzoom(m->mscaler);
 
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 }
 
 uint32_t InvertColorChannelsInverse(uint32_t d) {

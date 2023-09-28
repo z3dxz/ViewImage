@@ -31,13 +31,15 @@ const char* strtable[] {
 	"Zoom Auto",
 	"Zoom 1:1 (100%)",
 	"Rotate",
+	"Annotate",
 	"DELETE image",
+	"Print",
 	"Information"
 };
 
-int RenderStringFancy(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
+int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
 
-
+	if (m->width < 100) return 0;
 	const char* text = inputstr;
 
 	FT_GlyphSlot g = face->glyph;
@@ -83,6 +85,16 @@ int RenderStringFancy(GlobalParams* m, const char* inputstr, uint32_t locX, uint
 
 }
 
+
+void PlaceNewFont(GlobalParams* m, std::string text, int x, int y, std::string font, int size, uint32_t color) {
+	FT_Done_Face(face);
+	FT_Done_FreeType(ft);
+	InitFont(m->hwnd, font.c_str(), size);
+	PlaceString(m, text.c_str(), x, y, color, m->scrdata);
+
+}
+
+
 void dDrawFilledRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
@@ -113,12 +125,30 @@ void dDrawRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int he
 	}
 }
 
+void dDrawRoundedFilledRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth);
+			//if (x < 1 || x > width - 2 || y < 1 || y > height - 2) {
+				if (!(x == 0 && y == 0) && !(x == width - 1 && y == height - 1) && !(x == width - 1 && y == 0) && !(x == 0 && y == height - 1)) {
+					if (opacity < 0.99f) {
+						*ma = lerp(*ma, color, opacity);
+					}
+					else {
+						*ma = color;
+					}
+				}
+			//}
+		}
+	}
+}
+ 
 void dDrawRoundedRectangle(void* mem, int kwidth, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth);
 			if (x < 1 || x > width - 2 || y < 1 || y > height - 2) {
-				if (!(x == 0 && y == 0) && !(x == width - 1 && y == height - 1) && !(x == width - 1 && y == 0) && !(x == 0 && y == height - 1)) {
+				if (!(x == 0 && y == 0) && !(x == width - 1 && y == height - 1)&& !(x == width - 1 && y == 0) && !(x == 0 && y == height - 1)) {
 					if (opacity < 0.99f) {
 						*ma = lerp(*ma, color, opacity);
 					}
@@ -131,113 +161,99 @@ void dDrawRoundedRectangle(void* mem, int kwidth, int xloc, int yloc, int width,
 	}
 }
 
+bool paintBG = true;
+
+// MULTITHREADING!!!!!
+// https://www.youtube.com/watch?v=46ddlUImiQA
 //*********************************************
-void RedrawImageOnBitmap(GlobalParams* m) {
-	// Clear the bitmap
+
+void PlaceImage(GlobalParams* m) {
+
+	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
+		[&](uint32_t y) {
+			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
+			[&](uint32_t x) {
+					uint32_t bkc{};
+					// bkc
+					if (((x / 10) + (y / 10)) % 2 == 0) {
+						bkc = 0x161616;
+					}
+					else {
+						bkc = 0x0C0C0C;
+					}
+
+					float nscaler = 1.0f / m->mscaler;
+
+					int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2);
+					int32_t offY = (((int32_t)m->height - (int32_t)(m->imgheight * m->mscaler)) / 2);
+
+					offX += m->iLocX;
+					offY += m->iLocY;
 
 
-	uint32_t color = 0x101010;
+					int32_t ptx = (x - offX) * nscaler;
+					int32_t pty = (y - offY) * nscaler;
 
-	bool paintBG = true;
 
-	if (GetKeyState('L') & 0x8000 && GetKeyState('P') & 0x8000 && GetKeyState('M') & 0x8000) {
-		paintBG = false;
+					int margin = 2;
+					if (ptx < m->imgwidth && pty < m->imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
+						uint32_t c = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth));
+
+						int alpha = (c >> 24) & 255;
+						uint32_t doColor = c;
+						if (alpha != 255) {
+							doColor = lerp(bkc, c, ((float)alpha / 255.0f));
+						}
+						*GetMemoryLocation(m->scrdata, x, y, m->width) = doColor;
+
+					}
+					else {
+						if (paintBG) {
+							*GetMemoryLocation(m->scrdata, x, y, m->width) = bkc;
+						}
+					}
+				});
+		});
+}
+
+void RenderToolbarButton(GlobalParams* m, void* data, int maxButtons, uint32_t color, float opacity, uint32_t selectedColor, float selectedOpacity) {
+	int p = 5;
+	int k = 0;
+
+	for (int i = 0; i < maxButtons; i++) {
+		if ((p) > (m->width - (m->iconSize))) continue;
+		for (uint32_t y = 0; y < m->iconSize; y++) {
+			for (uint32_t x = 0; x < m->iconSize; x++) {
+
+
+				uint32_t l = (*GetMemoryLocation(data, x + k, y, m->widthos));
+				int l0 = ((l & 0x00FF0000) >> 16);
+				float ll = (float)l0 / 255.0f;
+				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, p + x, 6 + y, m->width); \
+					if (i != m->selectedbutton) {
+						*memoryPath = lerp(*memoryPath, color, ll * opacity); // transparency
+					}
+					else {
+						*memoryPath = lerp(*memoryPath, selectedColor, ll * selectedOpacity); // transparency
+					}
+			}
+		}
+		p += m->iconSize + 5; k += m->iconSize + 1;
 	}
+}
 
-	// render the image
-	// MULTITHREADING!!!!!
-	// https://www.youtube.com/watch?v=46ddlUImiQA
+void RenderToolbar(GlobalParams* m) {
 
-
-	if (!m->loading) {
-
-		std::for_each(std::execution::par, m->itv.begin(), m->itv.end(),
-			[&](uint32_t y) {
-				std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
-				[&](uint32_t x) {
-						uint32_t bkc{};
-						// bkc
-						if (((x / 10) + (y / 10)) % 2 == 0) {
-							bkc = 0x161616;
-						}
-						else {
-							bkc = 0x0C0C0C;
-						}
-
-						float nscaler = 1.0f / m->mscaler;
-
-						int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2);
-						int32_t offY = (((int32_t)m->height - (int32_t)(m->imgheight * m->mscaler)) / 2);
-
-						offX += m->iLocX;
-						offY += m->iLocY;
-
-
-						int32_t ptx = (x - offX) * nscaler;
-						int32_t pty = (y - offY) * nscaler;
-
-
-						int margin = 2;
-						if (ptx < m->imgwidth && pty < m->imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
-							uint32_t c = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth));
-
-							int alpha = (c >> 24) & 255;
-							uint32_t doColor = c;
-							if (alpha != 255) {
-								doColor = lerp(bkc, c, ((float)alpha / 255.0f));
-							}
-							*GetMemoryLocation(m->scrdata, x, y, m->width) = doColor;
-
-						}
-						else {
-							if (paintBG) {
-								*GetMemoryLocation(m->scrdata, x, y, m->width) = bkc;
-							}
-						}
-					});
-			});
-	}
-	/*
-	
-	for (uint32_t y = 0; y < m->height; y++) {
-
-		for (uint32_t x = 0; x < m->width; x++) {
-	*/
-			
-
-		//}
-	//}
-
-
-	if (m->imgwidth > 1) {
-
-		m->CoordLeft = (m->width / 2) - (-m->iLocX) - (int)(((float)(m->imgwidth / 2)) * m->mscaler);
-		m->CoordTop = (m->height / 2) - (-m->iLocY) - (int)(((float)(m->imgheight / 2)) * m->mscaler);
-
-		m->CoordRight = (m->width / 2) - (-m->iLocX) + (int)(((float)(m->imgwidth / 2)) * m->mscaler);
-		m->CoordBottom = (m->height / 2) - (-m->iLocY) + (int)(((float)(m->imgheight / 2)) * m->mscaler);
-
-	}
-
-	POINT p;
-	GetCursorPos(&p);
-	ScreenToClient(m->hwnd, &p);
-	
-	if ((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) {
 
 		// Render the toolbar
 
 
 		//BLUR FOR TOOLBAR
 		if ((GetKeyState('N') & 0x8000) && (GetKeyState('M') & 0x8000)) {
-			//gaussianBlur2((uint32_t*)m->scrdata, m->width, m->height, 5, 5, 200, 50, 2.0f);
-			boxBlur((uint32_t*)m->scrdata, m->width, m->height, 20);
-			//gaussian_blur((uint32_t*)m->scrdata, m->width, m->height, 4.0, m->width);
+			gaussian_blur((uint32_t*)m->scrdata, m->width, m->height, 4.0, m->width);
 		}
 		else if (m->CoordTop <= m->toolheight) {
-
-			boxBlur((uint32_t*)m->scrdata, m->width, m->toolheight, 20);
-			//gaussian_blur((uint32_t*)m->scrdata, m->width, m->toolheight, 4.0, m->width);
+				gaussian_blur((uint32_t*)m->scrdata, m->width, m->toolheight, 4.0, m->width);
 		}
 		else {
 
@@ -259,7 +275,7 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 				if (y == 0) color = 0x303030;
 				if (y == 1) color = 0x000000;
 				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, x, y, m->width);
-				*memoryPath = lerp(*memoryPath, color, 0.8f); // transparency
+				*memoryPath = lerp(*memoryPath, color, 0.65f); // transparency
 			}
 		}
 
@@ -272,42 +288,28 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 				*memoryPath = lerp(*memoryPath, color, (1.0f - ((float)y / 20.0f)) * 0.3f); // transparency
 			}
 		}
-
 		// BUTTONS
 
-		int p = 5;
-		int k = 0;
 
 		if (!m->toolbarData) return;
+		if (!m->toolbarData_shadow) return;
+
+		// render toolbar buttons shadow
+
+		int mybutton = m->maxButtons;
+		if (m->imgwidth < 1) mybutton = 1;
+
+		RenderToolbarButton(m, m->toolbarData_shadow, mybutton, 0, 0.7f, 0, 0.7f);
+		RenderToolbarButton(m, m->toolbarData, mybutton, 0xFFFFFF, 0.7f, 0xFFE0E0, 1.0f);
 
 
-		for (int i = 0; i < m->maxButtons; i++) {
-			if ((p) > (m->width - (m->iconSize))) continue;
-			for (uint32_t y = 0; y < m->iconSize; y++) {
-				for (uint32_t x = 0; x < m->iconSize; x++) {
-
-
-					uint32_t l = (*GetMemoryLocation(m->toolbarData, x + k, y, m->widthos));
-					int l0 = ((l & 0x00FF0000) >> 16);
-					float ll = (float)l0 / 255.0f;
-					uint32_t* memoryPath = GetMemoryLocation(m->scrdata, p + x, 6 + y, m->width); \
-						if (i != m->selectedbutton) {
-							*memoryPath = lerp(*memoryPath, 0xFFFFFF, ll * 0.7f); // transparency
-						}
-						else {
-							*memoryPath = lerp(*memoryPath, 0xFFE0E0, ll * 1.0f); // transparency
-						}
-				}
-			}
-			p += m->iconSize + 5; k += m->iconSize + 1;
-		}
-
-		if (m->selectedbutton >= 0 && m->selectedbutton < m->maxButtons) {
+		// tooltips
+		if (m->selectedbutton >= 0 && m->selectedbutton < mybutton) {
 			// rounded corners: split hover thing into three things
 
-			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton* GetButtonInterval(m) + 2)+1, 4, GetButtonInterval(m)-2, 1, 0xFF8080, 0.2f);
-			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton* GetButtonInterval(m) + 2), 5, GetButtonInterval(m), m->toolheight - 10, 0xFF8080, 0.2f);
-			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton* GetButtonInterval(m) + 2) + 1, (m->toolheight - 5), GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
+			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton * GetButtonInterval(m) + 2) + 1, 4, GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
+			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton * GetButtonInterval(m) + 2), 5, GetButtonInterval(m), m->toolheight - 10, 0xFF8080, 0.2f);
+			dDrawFilledRectangle(m->scrdata, m->width, (m->selectedbutton * GetButtonInterval(m) + 2) + 1, (m->toolheight - 5), GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
 
 
 
@@ -317,31 +319,124 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 			}
 
 			int loc = 1 + (m->selectedbutton * GetButtonInterval(m) + 2);
-
 			dDrawFilledRectangle(m->scrdata, m->width, loc, m->toolheight + 5, (txt.length() * 8) + 10, 18, 0x000000, 0.8f);
 			dDrawRoundedRectangle(m->scrdata, m->width, loc - 1, m->toolheight + 4, (txt.length() * 8) + 12, 20, 0x808080, 0.4f);
-			RenderStringFancy(m, txt.c_str(), loc + 4, m->toolheight + 2, 0xFFFFFF, m->scrdata);
+			PlaceNewFont(m, txt.c_str(), loc + 4, m->toolheight + 2, "C:\\Windows\\Fonts\\segoeui.ttf", 14, 0xFFFFFF);
+
+
+			// menu
+
+		}
+
+		PlaceNewFont(m, "v2.0", m->width - 30, 20, "C:\\Windows\\Fonts\\tahoma.ttf", 10, 0x808080);
+		
+}
+
+void ResetCoordinates(GlobalParams* m) {
+
+	if (m->imgwidth > 1) {
+
+		m->CoordLeft = (m->width / 2) - (-m->iLocX) - (int)(((float)(m->imgwidth / 2)) * m->mscaler);
+		m->CoordTop = (m->height / 2) - (-m->iLocY) - (int)(((float)(m->imgheight / 2)) * m->mscaler);
+
+		m->CoordRight = (m->width / 2) - (-m->iLocX) + (int)(((float)(m->imgwidth / 2)) * m->mscaler);
+		m->CoordBottom = (m->height / 2) - (-m->iLocY) + (int)(((float)(m->imgheight / 2)) * m->mscaler);
+
+	}
+}
+
+void DrawMenu(GlobalParams* m) {
+	int mH = m->mH;
+
+	int miX = 150;
+	int miY = (m->menuVector.size()*mH)+ m->menuVector.size();
+
+	m->menuSX = miX;
+	m->menuSY = miY;
+
+	int posX = m->menuX;
+	int posY = m->menuY;
+
+	gaussian_blur((uint32_t*)m->scrdata, miX-4, miY-4, 4.0f, m->width, posX+2, posY+2);
+	dDrawFilledRectangle(m->scrdata, m->width, posX, posY, miX, miY, 0x000000, 0.6f);
+	dDrawRoundedRectangle(m->scrdata, m->width, posX+1, posY+1, miX-2, miY-2, 0xFFFFFF, 0.1f);
+	dDrawRoundedRectangle(m->scrdata, m->width, posX, posY, miX, miY, 0x000000, 1.0f);
+
+	POINT mp;
+	GetCursorPos(&mp);
+	ScreenToClient(m->hwnd, &mp);
+
+	int selected = (mp.y-(posY+2))/mH;
+
+	if (mp.x > m->menuX && mp.y > m->menuY && mp.x < (m->menuX + m->menuSX) && mp.y < (m->menuY + m->menuSY)) {
+		dDrawRoundedFilledRectangle(m->scrdata, m->width, posX + 4, posY + 4 + ((mH)*selected), miX - 8, mH - 3, 0xFF8080, 0.1f);
+	}
+
+	for (int i = 0; i < m->menuVector.size(); i++) {
+
+		std::string mystr = m->menuVector[i].first;
+		if (mystr.length() >= 3 && mystr.substr(mystr.length() - 3) == "{s}") {
+			mystr = mystr.substr(0, mystr.length() - 3);
+		}
+
+		PlaceNewFont(m, mystr, posX + 10, (mH * i)+posY+7, "C:\\Windows\\Fonts\\verdana.ttf", 12, 0xF0F0F0);
+		if (i == m->menuVector.size()-1) continue;
+
+		if (strstr(m->menuVector[i].first.c_str(), "{s}")) {
+			dDrawFilledRectangle(m->scrdata, m->width, posX + 8, posY + mH + (mH * i) + 2, miX - 16, 1, 0xFFFFFF, 0.2f);
+		}
+		else {
+			dDrawFilledRectangle(m->scrdata, m->width, posX + 8, posY + mH + (mH * i) + 2, miX - 16, 1, 0xFFFFFF, 0.05f);
 		}
 	}
-	
-	
-	
-	FT_Done_Face(face);
-	FT_Done_FreeType(ft);
-	InitFont(m->hwnd, "C:\\Windows\\Fonts\\tahoma.ttf", 10);
-	RenderStringFancy(m, "v2.0", m->width-30, 20, 0x808080, m->scrdata);
+}
 
-	FT_Done_Face(face);
-	FT_Done_FreeType(ft);
-	InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
+void RedrawSurface(GlobalParams* m) {
+	// Clear the bitmap
+
+
+	uint32_t color = 0x101010;
+
+
+	if (GetKeyState('L') & 0x8000 && GetKeyState('P') & 0x8000 && GetKeyState('M') & 0x8000 && GetKeyState(VK_RCONTROL) && 0x8000) {
+		// DEBUG: Turn off background placement
+		paintBG = !paintBG;
+	}
+
+	// render the image
+	if (!m->loading) {
+		PlaceImage(m);
+	}
+	
+	// set the coordinates for the image
+	ResetCoordinates(m);
+
+	POINT p;
+	GetCursorPos(&p);
+	ScreenToClient(m->hwnd, &p);
+
+	if ((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) {
+		RenderToolbar(m);
+	}
+	if (m->isMenuState) {
+		DrawMenu(m);
+	}
+	
 
 	if (m->loading) {
 
+		PlaceNewFont(m, "Loading", 12, m->toolheight + 12, "C:\\Windows\\Fonts\\segoeui.ttf", 20, 0x000000);
+		PlaceString(m, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata);
+
 		FT_Done_Face(face);
 		FT_Done_FreeType(ft);
-		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 20);
-		RenderStringFancy(m, "Loading", 12, m->toolheight + 12, 0x000000, m->scrdata);
-		RenderStringFancy(m, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata);
+		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
+	}
+
+	if (m->drawmode) {
+
+		PlaceNewFont(m, "Draw Mode", 12, m->toolheight + 37, "C:\\Windows\\Fonts\\segoeui.ttf", 16, 0x000000);
+		PlaceNewFont(m, "Draw Mode", 12, m->toolheight + 35, "C:\\Windows\\Fonts\\segoeui.ttf", 16, 0xFFFFFF);
 
 		FT_Done_Face(face);
 		FT_Done_FreeType(ft);
@@ -358,7 +453,7 @@ void RedrawImageOnBitmap(GlobalParams* m) {
 	}
 	else {
 
-		sprintf(str, "View Image | Press F or click a button to begin");
+		sprintf(str, "View Image | Press F or click the folder button to begin");
 	}
 
 	SetWindowText(m->hwnd, str);

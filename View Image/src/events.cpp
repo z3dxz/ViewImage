@@ -15,6 +15,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	//InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
 	m->scrdata = malloc(m->width * m->height * 4);
 
+	m->toolbarData_shadow = LoadImageFromResource(IDB_PNG2, m->widthos, m->heightos, m->channelos);
 	m->toolbarData = LoadImageFromResource(IDB_PNG1, m->widthos, m->heightos, m->channelos);
 
 	// turn arguments into path
@@ -35,7 +36,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 		}
 	}
 	else {
-		RedrawImageOnBitmap(m);
+		RedrawSurface(m);
 	}
 
 	Size(m);
@@ -44,10 +45,18 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 }
 
 bool ToolbarMouseDown(GlobalParams* m) {
+	if (m->isMenuState) {
+		return 1;
+	}
+	m->toolmouseDown = true;
 	POINT mPP;
 	GetCursorPos(&mPP);
 	ScreenToClient(m->hwnd, &mPP);
 	uint32_t id = getXbuttonID(m, mPP);
+
+	
+
+	if (m->imgwidth > 0 || id == 0) {  } else { return 1; }
 	switch (id) {
 	case 0:
 		// open
@@ -74,7 +83,7 @@ bool ToolbarMouseDown(GlobalParams* m) {
 	case 5:
 		// zoom original
 		m->mscaler = 1.0f;
-		RedrawImageOnBitmap(m);
+		RedrawSurface(m);
 
 		return 0;
 	case 6:
@@ -87,6 +96,12 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		//MessageBox(hwnd, "I haven't added this feature yet", "Can't rotate image", MB_OK);
 		return 0;
 	case 7: {
+		// draw
+		m->drawmode = !m->drawmode;
+		RedrawSurface(m);
+		return 0;
+	}
+	case 8: {
 
 
 
@@ -105,7 +120,13 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		}
 		return 0;
 	}
-	case 8: {
+	case 9: {
+		// print
+		Print(m);
+		
+		return 0;
+	}
+	case 10: {
 
 		// image info
 
@@ -121,10 +142,12 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		return 0;
 	}
 	}
+
 	return 1;
 }
 
 void MouseDown(GlobalParams* m) {
+
 
 	m->lastMouseX = -1;
 	m->lastMouseY = -1;
@@ -134,7 +157,19 @@ void MouseDown(GlobalParams* m) {
 	POINT k;
 	GetCursorPos(&k);
 	ScreenToClient(m->hwnd, &k);
+
+
+	if (k.x > m->menuX && k.y > m->menuY && k.x < (m->menuX + m->menuSX) && k.y < (m->menuY + m->menuSY)) {
+
+	}
+	else {
+
+		m->isMenuState = false;
+		RedrawSurface(m);
+	}
+
 	if (k.y > m->toolheight) {
+		if(!m->isMenuState)
 		m->mouseDown = true;
 	}
 }
@@ -152,13 +187,11 @@ POINT* sampleLine(double x1, double y1, double x2, double y2, int numSamples) {
 	return samples;
 }
 
-
 void MouseMove(GlobalParams* m) {
 	POINT pos = { 0 };
 	GetCursorPos(&pos);
-	if (m->mouseDown) {
 
-		if (GetKeyState('G') & 0x8000) {
+	if (m->toolmouseDown && m->drawmode) {
 
 
 			ScreenToClient(m->hwnd, &pos);
@@ -178,7 +211,7 @@ void MouseMove(GlobalParams* m) {
 			for (int i = 0; i < samples0; i++) {
 
 				// drawing
-				int size = ((float)m->imgheight * 0.01f)+5;
+				int size = ((float)m->imgheight * 0.01f) + 5;
 				int halfsize = size / 2;
 
 				for (int y = 0; y < size; y++) {
@@ -190,7 +223,7 @@ void MouseMove(GlobalParams* m) {
 							uint32_t yloc = (y - halfsize) + (k2[i].y);
 							if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
 								uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth);
-								*memoryPath = lerp(*memoryPath, 0xFFFF0000, (yes / pow(halfsize, 2))*0.04f); // transparency
+								*memoryPath = lerp(*memoryPath, 0xFFFF0000, (yes / pow(halfsize, 2)) * 0.04f); // transparency
 								m->shouldSaveShutdown = true;
 							}
 						}
@@ -202,17 +235,18 @@ void MouseMove(GlobalParams* m) {
 			m->lastMouseX = pos.x;
 			m->lastMouseY = pos.y;
 
-			RedrawImageOnBitmap(m);
+			RedrawSurface(m);
 			return;
-		}
-		else {
+	}
+	else if (m->mouseDown) {
+
+		
 
 			m->iLocX = m->lockimgoffx - (m->LockmPos.x - pos.x);
 			m->iLocY = m->lockimgoffy - (m->LockmPos.y - pos.y);
 
-		}
 
-		RedrawImageOnBitmap(m);
+		RedrawSurface(m);
 	}
 	else {
 
@@ -221,17 +255,17 @@ void MouseMove(GlobalParams* m) {
 		if (pos.y <= m->toolheight) {
 			m->lock = true;
 			m->selectedbutton = getXbuttonID(m, pos);
-			RedrawImageOnBitmap(m);
+			RedrawSurface(m);
 		}
 		else {
 			if (m->lock) {
 				m->selectedbutton = -1;
-				RedrawImageOnBitmap(m);
+				RedrawSurface(m);
 				m->lock = false;
 			}
 		}
 	}
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 }
 
 void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
@@ -243,7 +277,7 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		return;
 	}
 	if (wparam == 'G') {
-		
+		m->drawmode = !m->drawmode;
 	}
 	if (wparam == VK_F11) {
 		if (m->fullscreen) {
@@ -253,16 +287,16 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			SetWindowPlacement(m->hwnd, &m->wpPrev);
 			SetWindowPos(m->hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
 			m->fullscreen = false;
-			RedrawImageOnBitmap(m);
+			RedrawSurface(m);
 		}
 		else {
 			m->fullscreen = true;
 			int screenX = GetSystemMetrics(SM_CXSCREEN);
 			int screenY = GetSystemMetrics(SM_CYSCREEN);
 			GetWindowPlacement(m->hwnd, &m->wpPrev);
-			SetWindowPos(m->hwnd, 0, 0, 0, screenX, screenY, 0);
 			SetWindowLong(m->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-			RedrawImageOnBitmap(m);
+			SetWindowPos(m->hwnd, 0, 0, 0, screenX, screenY, 0);
+			RedrawSurface(m);
 		}
 	}
 	if (wparam == VK_LEFT) {
@@ -332,12 +366,64 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	if (wparam == '8') {
 		m->mscaler = 8.0f;
 	}
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 }
 
 void MouseUp(GlobalParams* m) {
 	m->isSize = false;
 	m->mouseDown = false;
+	m->toolmouseDown = false;
+
+	POINT pos;
+	GetCursorPos(&pos);
+	ScreenToClient(m->hwnd, &pos);
+
+	if (m->isMenuState) {
+		// menu logic
+		if (pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY)) {
+
+			int selected = (pos.y - (m->menuY + 2)) / m->mH;
+			auto l = m->menuVector[selected].second;
+			l();
+			m->isMenuState = false;
+			RedrawSurface(m);
+			//Beep(selected *100, 100);
+		}
+	}
+}
+
+void RightUp(GlobalParams* m) {
+	POINT pos;
+	GetCursorPos(&pos);
+	ScreenToClient(m->hwnd, &pos);
+		m->menuVector = {
+
+			{"Resave Image",
+				[m]() -> bool {
+					PrepareSaveImage(m);
+					return true;
+				},
+			},
+
+			{"Toggle Annotate{s}",
+				[m]() -> bool {
+					m->drawmode = !m->drawmode;
+					return true;
+				},
+			},
+
+			{"Force Exit (No Save)",
+				[m]() -> bool {
+					exit(0);
+					return true;
+				},
+			},
+		
+		};
+		m->menuX = (pos.x > (m->width-m->menuSX)) ? (m->width - m->menuSX) : pos.x;
+		m->menuY = (pos.y > (m->height - m->menuSY)) ? (m->height - m->menuSY) : pos.y;
+		m->isMenuState = true;
+		RedrawSurface(m);
 }
 
 void Size(GlobalParams* m) {
@@ -348,6 +434,8 @@ void Size(GlobalParams* m) {
 		m->width = ws.right - ws.left;
 		m->height = ws.bottom - ws.top;
 
+		if (m->width < 1) { m->width = 1; }
+		if (m->height < 1) { m->height = 1; }
 
 		m->scrdata = realloc(m->scrdata, m->width * m->height * 4);
 
@@ -361,7 +449,7 @@ void Size(GlobalParams* m) {
 
 		autozoom(m);
 
-		RedrawImageOnBitmap(m);
+		RedrawSurface(m);
 	}
 }
 

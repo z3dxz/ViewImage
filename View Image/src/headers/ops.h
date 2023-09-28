@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include "rendering.h"
 #include <iostream>
+#include <VersionHelpers.h>
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
@@ -24,6 +25,7 @@ unsigned char* LoadImageFromResource(int resourceId, int& width, int& height, in
 #pragma region Math
 
 
+void Print(GlobalParams* m);
 void rotateImage90Degrees(GlobalParams* m);
 
 int GetButtonInterval(GlobalParams* m);

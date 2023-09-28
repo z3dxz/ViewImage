@@ -6,7 +6,10 @@
 #include <cmath>
 #include <memory>
 #include <execution>
+#include <ft2build.h>
 #include <freetype/freetype.h>
 
+#pragma comment(lib, "freetype.lib")
+
 bool InitFont(HWND hwnd, const char* font, int size);
-void RedrawImageOnBitmap(GlobalParams* m);
+void RedrawSurface(GlobalParams* m);

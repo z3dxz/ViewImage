@@ -9,6 +9,7 @@
 #include <string>
 #include "../resource.h"
 #include <cstdint>
+#include "headers/ops.h"
 #include <dwmapi.h>
 #include "headers/globalvar.h"
 #include "headers/imgload.h"
@@ -58,7 +59,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 	// RIGHT HERE: WIDTH = 1024
 
-	gp.hwnd = CreateWindow(CLASS_NAME, WINDOW_NAME, WS_OVERLAPPEDWINDOW | WS_VISIBLE, px, py, w_width, w_height, NULL, NULL, NULL, NULL);
+	gp.hwnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, WS_OVERLAPPEDWINDOW | WS_VISIBLE, px, py, w_width, w_height, NULL, NULL, NULL, NULL);
 
 
 	// RIGHT HERE: WIDTH = 0
@@ -78,19 +79,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 			if (GetKeyState('W') & 0x8000) {
 				gp.iLocY += 3;
-				RedrawImageOnBitmap(&gp);
+				RedrawSurface(&gp);
 			}
 			if (GetKeyState('A') & 0x8000) {
 				gp.iLocX += 3;
-				RedrawImageOnBitmap(&gp);
+				RedrawSurface(&gp);
 			}
 			if (GetKeyState('S') & 0x8000) {
 				gp.iLocY -= 3;
-				RedrawImageOnBitmap(&gp);
+				RedrawSurface(&gp);
 			}
 			if (GetKeyState('D') & 0x8000) {
 				gp.iLocX -= 3;
-				RedrawImageOnBitmap(&gp);
+				RedrawSurface(&gp);
 			}
 		}
 
@@ -107,8 +108,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+
+
 	switch (msg) {
 	case WM_CREATE: {
+
 
 		BOOL enable = TRUE;
 		DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
@@ -131,15 +135,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 			return 0;
 		}
 	}
-	case WM_MBUTTONDOWN:
-	case WM_RBUTTONDOWN: {
+	case WM_MBUTTONDOWN: {
 		MouseDown(&gp);
 		break;
 	}
 	case WM_LBUTTONUP:
-	case WM_MBUTTONUP:
-	case WM_RBUTTONUP: {
+	case WM_MBUTTONUP: {
 		MouseUp(&gp);
+		break;
+	}
+	case WM_RBUTTONUP: {
+
+			RightUp(&gp);
+
 		break;
 	}
 	case WM_MOUSEMOVE:
@@ -154,6 +162,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_SIZE: {
 		Size(&gp);
+
 		break;
 	}
 	case WM_MOUSEWHEEL: {
@@ -189,6 +198,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
 	}
+
+
 	return 0;
 }
 

@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <Windows.h>
+#include <functional>
 
 struct GlobalParams {
 	// the global window
@@ -10,8 +11,10 @@ struct GlobalParams {
 
 	// memory
 	void* imgdata;
+	void* imgoriginaldata;
 	void* scrdata;
 	unsigned char* toolbarData;
+	unsigned char* toolbarData_shadow;
 
 	// strings
 	std::string fpath;
@@ -29,7 +32,7 @@ struct GlobalParams {
 	int channelos;
 
 	// settings
-	int maxButtons = 9;
+	int maxButtons = 11;
 	const int iconSize = 30;
 	int toolheight = 43;
 
@@ -42,6 +45,7 @@ struct GlobalParams {
 	bool halt = false;
 
 	bool mouseDown = false;
+	bool toolmouseDown = false;
 
 	int selectedbutton = -1;
 
@@ -68,4 +72,16 @@ struct GlobalParams {
 
 	// iterators
 	std::vector<uint32_t> ith, itv;
+
+	bool drawmode = false;
+
+	bool isMenuState = false;
+
+	int menuY = toolheight+5;
+	int menuX = 0;
+	int menuSX = 0;
+	int menuSY = 0;
+	int mH = 25;
+
+	std::vector<std::pair<std::string, std::function<bool()>>> menuVector;
 };

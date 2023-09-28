@@ -43,12 +43,21 @@ void ShowMessageBox(const std::string& message) {
 
 std::string FileSaveDialog(HWND hwnd) {
 	OPENFILENAME ofn;
-	TCHAR szFile[260] = { 0 };
+	char szFileName[200];
+
+	SYSTEMTIME systemTime;
+	GetLocalTime(&systemTime);
+
+	sprintf(szFileName, "IMG_saved %04d-%02d-%02d %02d%02d%02d",
+		systemTime.wYear, systemTime.wMonth, systemTime.wDay,
+		systemTime.wHour%24, systemTime.wMinute, systemTime.wSecond);
+
 	ZeroMemory(&ofn, sizeof(OPENFILENAME));
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = NULL;
 	ofn.lpstrFilter = "PNG Files (*.png)\0*.png\0All Files (*.*)\0*.*\0";
-	ofn.lpstrFile = szFile;
+	ofn.lpstrFile = szFileName;
+	ofn.nMaxFile = sizeof(szFileName);
 	ofn.nMaxFile = MAX_PATH;
 	ofn.lpstrDefExt = "png";
 	ofn.lpstrTitle = "Save as a PNG File";
@@ -66,12 +75,13 @@ void PrepareSaveImage(GlobalParams* m) {
 	if (res != "Invalid") {
 
 		m->loading = true;
-		RedrawImageOnBitmap(m);
+		RedrawSurface(m);
 		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
 
 		m->loading = false;
 		m->shouldSaveShutdown = false;
-		RedrawImageOnBitmap(m);
+		RedrawSurface(m);
+		OpenImageFromPath(m, res, false);
 	}
 
 }
@@ -95,12 +105,13 @@ bool doIFSave(GlobalParams* m) {
 }
 
 bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
+	m->drawmode = false;
 	if (!isLeftRight) {
 		clear_kvector();
 	}
 	
 	m->loading = true;
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 
 	if (!doIFSave(m)) {
 		return false;
@@ -184,7 +195,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 
 	m->loading = false;
 
-	RedrawImageOnBitmap(m);
+	RedrawSurface(m);
 	return true;
 }
 
@@ -197,7 +208,7 @@ std::string FileOpenDialog(HWND hwnd) {
 	ofn.hwndOwner = hwnd;
 	ofn.lpstrFile = szFile;
 	ofn.nMaxFile = sizeof(szFile);
-	ofn.lpstrFilter = "Supported Images (*.jpeg *.jpg *.png *.tga *.bmp *.psd; .gif; .hdr; .pic; .pnm; .m45)\0*.m45;*.jpeg;*.jpg;*.png;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0All Images\0*.*";
+	ofn.lpstrFilter = "Supported Images (*.jpeg *.jpg *.png *.tga *.bmp *.psd; .gif; .hdr; .pic; .pnm; .m45)\0*.m45;*.jpeg;*.jpg;*.png;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0Every File\0*";
 	ofn.nFilterIndex = 1;
 	ofn.lpstrFileTitle = NULL;
 	ofn.nMaxFileTitle = 0;

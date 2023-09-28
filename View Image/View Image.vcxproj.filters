@@ -84,5 +84,8 @@
     <Image Include="checkerboard_pattern.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="toolshadow.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
