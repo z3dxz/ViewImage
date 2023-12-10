@@ -1,17 +1,22 @@
 #pragma once
+#include <iostream>
+#include <algorithm>
+#include "../gaussian_blur_template.h"
 #include "globalvar.h"
 #include <Windows.h>
 #include "rendering.h"
-#include <iostream>
 #include <VersionHelpers.h>
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
+
 #pragma region Memory
 
-#define GetMemoryLocation(start, x, y, widthfactor) \
-	((uint32_t*)(start) + ((y) * (widthfactor)) + (x))\
-\
+#define GetMemoryLocation(start, x, y, widthfactor, heightfactor) \
+	 (( (((y) * (widthfactor)) + (x)) < (widthfactor*heightfactor) ) ? ((uint32_t*)(start) + ((y) * (widthfactor)) + (x))  : ((uint32_t*)(start)) ) 
+
+#define GetMemoryLocationTemplate(start, x, y, widthfactor, heightfactor) \
+	 (( (((y) * (widthfactor)) + (x)) < (widthfactor*heightfactor) ) ? ((start) + ((y) * (widthfactor)) + (x))  : ((start)) ) 
 
 #pragma endregion
 
@@ -53,6 +58,7 @@ double gaussian(double x, double sigma);
 
 void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize);
 // Gaussian blur function
-void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t offX = 0, uint32_t offY = 0);
+void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX = 0, uint32_t offY = 0);
 
+void gaussian_blur_f(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX = 0, uint32_t offY = 0);
 #pragma endregion

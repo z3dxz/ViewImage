@@ -83,5 +83,7 @@ struct GlobalParams {
 	int menuSY = 0;
 	int mH = 25;
 
+	bool smoothing = true;
+
 	std::vector<std::pair<std::string, std::function<bool()>>> menuVector;
 };

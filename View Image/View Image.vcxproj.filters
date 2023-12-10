@@ -65,6 +65,9 @@
     <ClInclude Include="src\headers\leftrightlogic.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\gaussian_blur_template.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="View Image.rc">

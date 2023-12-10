@@ -12,7 +12,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 
 	m->cd = std::string(buffer);
 
-	//InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
+	//InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 	m->scrdata = malloc(m->width * m->height * 4);
 
 	m->toolbarData_shadow = LoadImageFromResource(IDB_PNG2, m->widthos, m->heightos, m->channelos);
@@ -22,7 +22,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, NULL, 0, NULL, NULL);
 
 
-	InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.ttf", 14);
+	InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 
 	char* path = (char*)malloc(size_needed);
 	WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, path, size_needed, NULL, NULL);
@@ -222,7 +222,7 @@ void MouseMove(GlobalParams* m) {
 							uint32_t xloc = (x - halfsize) + (k2[i].x);
 							uint32_t yloc = (y - halfsize) + (k2[i].y);
 							if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
-								uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth);
+								uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth, m->imgheight);
 								*memoryPath = lerp(*memoryPath, 0xFFFF0000, (yes / pow(halfsize, 2)) * 0.04f); // transparency
 								m->shouldSaveShutdown = true;
 							}
@@ -405,9 +405,16 @@ void RightUp(GlobalParams* m) {
 				},
 			},
 
-			{"Toggle Annotate{s}",
+			{"Toggle Annotate",
 				[m]() -> bool {
 					m->drawmode = !m->drawmode;
+					return true;
+				},
+			},
+
+			{"Toggle Smoothing",
+				[m]() -> bool {
+					m->smoothing = !m->smoothing;
 					return true;
 				},
 			},

@@ -2,15 +2,6 @@
 #include "../resource.h"
 
 
-
-#pragma region Memory
-
-#define GetMemoryLocation(start, x, y, widthfactor) \
-	((uint32_t*)(start) + ((y) * (widthfactor)) + (x))\
-\
-
-#pragma endregion
-
 #pragma region File
 
 bool isFile(const char* str, const char* suffix) {
@@ -162,7 +153,7 @@ void rotateImage90Degrees(GlobalParams* m) {
 	// Transfer pixels to rotated image
 	for (size_t y = 0; y < newHeight; y++) {
 		for (size_t x = 0; x < newWidth; x++) {
-			*GetMemoryLocation(rotatedImage, x,y, newWidth) = *GetMemoryLocation(m->imgdata,y, newWidth - 1 - x, m->imgheight);
+			*GetMemoryLocation(rotatedImage, x,y, newWidth, newHeight) = *GetMemoryLocation(m->imgdata,y, newWidth - 1 - x, m->imgheight, m->imgwidth);
 		}
 	}
 
@@ -265,6 +256,32 @@ uint32_t InvertColorChannels(uint32_t d) {
 	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
 }
 
+static const float gammaLUTL[256] = { 0, 0.00129465, 0.00594864, 0.014515, 0.0273328, 0.0446566, 0.0666936, 0.0936197, 0.125588, 0.162737, 0.205188, 0.253055, 0.306444, 0.365449, 0.430163, 0.500671, 0.577053, 0.659386, 0.747741, 0.842189, 0.942796, 1.04963, 1.16274, 1.28219, 1.40804, 1.54035, 1.67916, 1.82453, 1.97651, 2.13514, 2.30048, 2.47256, 2.65144, 2.83715, 3.02974, 3.22925, 3.43572, 3.64918, 3.86969, 4.09726, 4.33195, 4.57379, 4.82281, 5.07905, 5.34254, 5.61331, 5.89141, 6.17685, 6.46968, 6.76991, 7.0776, 7.39275, 7.71541, 8.0456, 8.38336, 8.7287, 9.08166, 9.44227, 9.81055, 10.1865, 10.5702, 10.9617, 11.3609, 11.768, 12.1828, 12.6055, 13.0361, 13.4746, 13.921, 14.3754, 14.8377, 15.3081, 15.7864, 16.2728, 16.7672, 17.2698, 17.7804, 18.2992, 18.8261, 19.3612, 19.9044, 20.4559, 21.0156, 21.5836, 22.1598, 22.7443, 23.3372, 23.9383, 24.5479, 25.1657, 25.792, 26.4267, 27.0698, 27.7213, 28.3814, 29.0498, 29.7268, 30.4123, 31.1064, 31.8089, 32.5201, 33.2398, 33.9682, 34.7051, 35.4507, 36.205, 36.9679, 37.7395, 38.5198, 39.3088, 40.1066, 40.9131, 41.7284, 42.5524, 43.3853, 44.227, 45.0775, 45.9368, 46.805, 47.6821, 48.568, 49.4629, 50.3667, 51.2794, 52.2011, 53.1317, 54.0713, 55.0199, 55.9775, 56.9442, 57.9198, 58.9045, 59.8983, 60.9011, 61.9131, 62.9341, 63.9643, 65.0035, 66.052, 67.1096, 68.1763, 69.2523, 70.3374, 71.4317, 72.5353, 73.6481, 74.7701, 75.9014, 77.042, 78.1919, 79.351, 80.5195, 81.6973, 82.8844, 84.0809, 85.2867, 86.502, 87.7265, 88.9605, 90.2039, 91.4568, 92.719, 93.9907, 95.2718, 96.5624, 97.8625, 99.1721, 100.491, 101.82, 103.158, 104.506, 105.863, 107.23, 108.606, 109.992, 111.387, 112.792, 114.207, 115.631, 117.065, 118.509, 119.962, 121.425, 122.898, 124.38, 125.872, 127.374, 128.885, 130.406, 131.937, 133.478, 135.028, 136.589, 138.159, 139.738, 141.328, 142.927, 144.536, 146.156, 147.784, 149.423, 151.072, 152.73, 154.398, 156.077, 157.765, 159.463, 161.171, 162.889, 164.617, 166.354, 168.102, 169.86, 171.628, 173.405, 175.193, 176.991, 178.798, 180.616, 182.444, 184.281, 186.129, 187.987, 189.855, 191.733, 193.621, 195.52, 197.428, 199.346, 201.275, 203.214, 205.163, 207.122, 209.091, 211.07, 213.06, 215.059, 217.069, 219.089, 221.12, 223.16, 225.211, 227.272, 229.343, 231.425, 233.516, 235.618, 237.731, 239.853, 241.986, 244.129, 246.283, 248.447, 250.621, 252.805, 255 };
+static const float gammaLUTS[256] = { 0, 21.0667, 28.778, 34.5384, 39.3119, 43.4644, 47.1808, 50.5698, 53.7016, 56.6247, 59.3741, 61.976, 64.4509, 66.8146, 69.0804, 71.2587, 73.3586, 75.3875, 77.3517, 79.2567, 81.1074, 82.9079, 84.6618, 86.3723, 88.0425, 89.6747, 91.2715, 92.8348, 94.3666, 95.8686, 97.3423, 98.7893, 100.211, 101.608, 102.982, 104.334, 105.666, 106.976, 108.268, 109.541, 110.796, 112.034, 113.256, 114.461, 115.651, 116.827, 117.988, 119.135, 120.27, 121.391, 122.499, 123.596, 124.681, 125.754, 126.816, 127.868, 128.909, 129.939, 130.96, 131.972, 132.974, 133.966, 134.95, 135.925, 136.892, 137.85, 138.801, 139.743, 140.678, 141.605, 142.525, 143.438, 144.343, 145.242, 146.134, 147.019, 147.898, 148.771, 149.637, 150.498, 151.352, 152.2, 153.043, 153.88, 154.712, 155.538, 156.358, 157.174, 157.984, 158.79, 159.59, 160.386, 161.176, 161.962, 162.744, 163.521, 164.293, 165.061, 165.825, 166.584, 167.339, 168.09, 168.837, 169.58, 170.319, 171.054, 171.785, 172.512, 173.236, 173.956, 174.672, 175.385, 176.094, 176.8, 177.502, 178.201, 178.897, 179.589, 180.279, 180.964, 181.647, 182.327, 183.003, 183.677, 184.347, 185.015, 185.679, 186.341, 187, 187.656, 188.309, 188.96, 189.607, 190.252, 190.895, 191.535, 192.172, 192.806, 193.438, 194.068, 194.695, 195.32, 195.942, 196.561, 197.179, 197.794, 198.407, 199.017, 199.625, 200.231, 200.834, 201.436, 202.035, 202.632, 203.227, 203.82, 204.41, 204.999, 205.586, 206.17, 206.753, 207.333, 207.912, 208.488, 209.063, 209.636, 210.206, 210.775, 211.342, 211.907, 212.471, 213.032, 213.592, 214.15, 214.706, 215.26, 215.813, 216.364, 216.913, 217.461, 218.007, 218.551, 219.093, 219.634, 220.174, 220.711, 221.247, 221.782, 222.315, 222.846, 223.376, 223.904, 224.431, 224.956, 225.48, 226.002, 226.523, 227.042, 227.56, 228.077, 228.592, 229.105, 229.618, 230.128, 230.638, 231.146, 231.653, 232.158, 232.662, 233.165, 233.666, 234.166, 234.665, 235.162, 235.659, 236.154, 236.647, 237.14, 237.631, 238.121, 238.609, 239.097, 239.583, 240.068, 240.552, 241.035, 241.516, 241.996, 242.475, 242.953, 243.43, 243.906, 244.381, 244.854, 245.326, 245.798, 246.268, 246.737, 247.205, 247.672, 248.137, 248.602, 249.066, 249.528, 249.99, 250.45, 250.91, 251.368, 251.826, 252.282, 252.738, 253.192, 253.646, 254.098, 254.55, 255 };
+
+uint32_t lerpz(uint32_t color1, uint32_t color2, float alpha)
+{
+	// Extract the individual color channels from the input values
+	float a1 = gammaLUTL[(color1 >> 24) & 0xFF];
+	float r1 = gammaLUTL[(color1 >> 16) & 0xFF];
+	float g1 = gammaLUTL[(color1 >> 8) & 0xFF];
+	float b1 = gammaLUTL[color1 & 0xFF];
+
+	float a2 = gammaLUTL[(color2 >> 24) & 0xFF];
+	float r2 = gammaLUTL[(color2 >> 16) & 0xFF];
+	float g2 = gammaLUTL[(color2 >> 8) & 0xFF];
+	float b2 = gammaLUTL[color2 & 0xFF];
+
+	// Calculate the lerped color values for each channel
+	uint8_t a = gammaLUTS[(uint8_t)((1.0f - alpha) * a1 + alpha * a2)];
+	uint8_t r = gammaLUTS[(uint8_t)((1.0f - alpha) * r1 + alpha * r2)];
+	uint8_t g = gammaLUTS[(uint8_t)((1.0f - alpha) * g1 + alpha * g2)];
+	uint8_t b = gammaLUTS[(uint8_t)((1.0f - alpha) * b1 + alpha * b2)];
+
+	// Combine the lerped color channels into a single 32-bit value
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
 uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 {
 	// Extract the individual color channels from the input values
@@ -287,8 +304,6 @@ uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 	// Combine the lerped color channels into a single 32-bit value
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
-
-
 
 // Gaussian function
 double gaussian(double x, double sigma) {
@@ -380,10 +395,62 @@ void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize
 
 
 
+int kernel[3][3] = { 1, 2, 1,
+				   2, 4, 2,
+				   1, 2, 1 };
+/*
+int accessPixel(unsigned char* arr, int col, int row, int k, int width, int height)
+{
+	int sum = 0;
+	int sumKernel = 0;
+
+	for (int j = -1; j <= 1; j++)
+	{
+		for (int i = -1; i <= 1; i++)
+		{
+			if ((row + j) >= 0 && (row + j) < height && (col + i) >= 0 && (col + i) < width)
+			{
+				int color = arr[(row + j) * 3 * width + (col + i) * 3 + k];
+				sum += color * kernel[i + 1][j + 1];
+				sumKernel += kernel[i + 1][j + 1];
+			}
+		}
+	}
+
+	return sum / sumKernel;
+}
+
+void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
+	unsigned char* result = (unsigned char*)malloc(width * height * 4);
+	for (int row = 0; row < height; row++)
+	{
+		for (int col = 0; col < width; col++)
+		{
+			for (int k = 0; k < 3; k++)
+			{
+				result[3 * row * width + 3 * col + k] = accessPixel((unsigned char*)pixels, col, row, k, width, height);
+			}
+		}
+	}
+	memcpy((unsigned char*)pixels, result, (width * height*4));
+}
+*/
+
+void gaussian_blur_f(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
+
+	int size = width * height;
+	unsigned char* result = (unsigned char*)malloc(size * 4);
+	unsigned char* px = (unsigned char*)pixels;
+
+	fast_gaussian_blur(px, result, width, lH, 4, 4.0f, 10, Border::kKernelCrop);
+
+	// it swap itself
+	delete[] px;
+}
 
 
 // Gaussian blur function
-void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t offX, uint32_t offY) {
+void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
 	// Compute kernel size
 	int kernel_size = (int)ceil(sigma * 3) * 2 + 1;
 
@@ -416,7 +483,8 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 			for (k = 0; k < kernel_size; k++) {
 				int xk = x - (kernel_size - 1) / 2 + k;
 				if (xk >= 0 && xk < width) {
-					uint32_t pixel = pixels[(y + offY) * width + (xk + offX)];
+					uint32_t pixel = *GetMemoryLocation(pixels, (xk + offX), (y + offY), width, height);
+					//uint32_t pixel = pixels[(y + offY) * width + (xk + offX)];
 					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
 					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
 					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
@@ -428,7 +496,8 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 		}
 		// Copy row back into pixels array
 		for (x = 0; x < lW; x++) {
-			pixels[(y + offY) * width + (x + offX)] = row[x];
+			*GetMemoryLocation(pixels, (x + offX), (y + offY), width, height) = row[x];
+			//pixels[(y + offY) * width + (x + offX)] = row[x];
 		}
 	}
 
@@ -440,7 +509,8 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 			for (k = 0; k < kernel_size; k++) {
 				int yk = y - (kernel_size - 1) / 2 + k;
 				if (yk >= 0 && yk < lH) {
-					uint32_t pixel = pixels[(yk + offY) * width + (x + offX)];
+					uint32_t pixel = *GetMemoryLocation(pixels, (x + offX), (yk + offY), width, height);
+					//uint32_t pixel = pixels[(yk + offY) * width + (x + offX)];
 					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
 					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
 					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
@@ -452,7 +522,8 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 		}
 		// Copy row back into pixels array
 		for (y = 0; y < lH; y++) {
-			pixels[(offY + y) * width + (offX + x)] = row[y];
+			*GetMemoryLocation(pixels, (offX + x), (offY + y), width, height) = row[y];
+			//pixels[(offY + y) * width + (offX + x)] = row[y];
 		}
 	}
 

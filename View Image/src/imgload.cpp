@@ -190,7 +190,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 
 	// Auto-zoom
 	autozoom(m);
-
+	m->smoothing = ((m->imgwidth * m->imgheight) > 625);
 	m->shouldSaveShutdown = false;
 
 	m->loading = false;
@@ -198,6 +198,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	RedrawSurface(m);
 	return true;
 }
+
 
 
 std::string FileOpenDialog(HWND hwnd) {
