@@ -11,10 +11,15 @@ struct GlobalParams {
 
 	// memory
 	void* imgdata;
-	void* imgoriginaldata;
+	void* imgannotate;
 	void* scrdata;
+	void* toolbar_gaussian_data;
+	uint32_t* tempCombineBuffer;
 	unsigned char* toolbarData;
 	unsigned char* toolbarData_shadow;
+	std::vector<uint32_t*> undoData;
+	void* tempResizeBuffer;
+	int undoStep = 0;
 
 	// strings
 	std::string fpath;
@@ -46,6 +51,7 @@ struct GlobalParams {
 
 	bool mouseDown = false;
 	bool toolmouseDown = false;
+	bool drawmousedown = false;
 
 	int selectedbutton = -1;
 
@@ -73,7 +79,6 @@ struct GlobalParams {
 	// iterators
 	std::vector<uint32_t> ith, itv;
 
-	bool drawmode = false;
 
 	bool isMenuState = false;
 
@@ -86,4 +91,13 @@ struct GlobalParams {
 	bool smoothing = true;
 
 	std::vector<std::pair<std::string, std::function<bool()>>> menuVector;
+
+	// drawing/annotating
+
+	bool drawmode = false;
+	uint32_t a_drawColor = 0x800000;
+	float a_relativeSize = 0.02f;
+	int a_hardness = 50;
+	int a_frost = 10;
+	float a_opacity = 0.04f;
 };

@@ -216,21 +216,12 @@ bool paintBG = true;
 // https://www.youtube.com/watch?v=46ddlUImiQA
 //*********************************************
 
-void PlaceImageNN(GlobalParams* m) {
+void PlaceImageNN(GlobalParams* m, void* memory, bool invert) {
 
 	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
 		[&](uint32_t y) {
 			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
 			[&](uint32_t x) {
-					uint32_t bkc{};
-					// bkc
-					if (((x / 10) + (y / 10)) % 2 == 0) {
-						bkc = 0x161616;
-					}
-					else {
-						bkc = 0x0C0C0C;
-					}
-
 					float nscaler = 1.0f / m->mscaler;
 
 					int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2);
@@ -246,31 +237,22 @@ void PlaceImageNN(GlobalParams* m) {
 
 					int margin = 2;
 					if (ptx < m->imgwidth && pty < m->imgheight && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
-						uint32_t c = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx, pty, m->imgwidth, m->imgheight));
+						uint32_t c = InvertColorChannels(*GetMemoryLocation(memory, ptx, pty, m->imgwidth, m->imgheight), invert);
 
 						int alpha = (c >> 24) & 255;
 						uint32_t doColor = c;
 						if (alpha != 255) {
-							doColor = lerp(bkc, c, ((float)alpha / 255.0f));
+							uint32_t existing = *GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
+							doColor = lerp(existing, c, ((float)alpha / 255.0f));
 						}
 						*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = doColor;
 
 					}
-					else {
-						if (paintBG) {
-							*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = bkc;
-						}
-					}
 				});
 		});
 }
-
-void PlaceImageBI(GlobalParams* m) {
-	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
-		[&](uint32_t y) {
-			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
-			[&](uint32_t x) {
-					uint32_t bkc{};
+/*
+uint32_t bkc{};
 					// bkc
 					if (((x / 10) + (y / 10)) % 2 == 0) {
 						bkc = 0x161616;
@@ -278,7 +260,12 @@ void PlaceImageBI(GlobalParams* m) {
 					else {
 						bkc = 0x0C0C0C;
 					}
-
+*/
+void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
+	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
+		[&](uint32_t y) {
+			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
+			[&](uint32_t x) {
 					float nscaler = 1.0f / m->mscaler;
 
 					int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2);
@@ -299,25 +286,21 @@ void PlaceImageBI(GlobalParams* m) {
 						float pty_frac = pty - pty_int;
 
 						// Get the four nearest pixels
-						uint32_t c00 = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx_int, pty_int, m->imgwidth, m->imgheight));
-						uint32_t c01 = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx_int + 1, pty_int, m->imgwidth, m->imgheight));
-						uint32_t c10 = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx_int, pty_int + 1, m->imgwidth, m->imgheight));
-						uint32_t c11 = InvertColorChannels(*GetMemoryLocation(m->imgdata, ptx_int + 1, pty_int + 1, m->imgwidth, m->imgheight));
+						uint32_t c00 = InvertColorChannels(*GetMemoryLocation(memory, ptx_int, pty_int, m->imgwidth, m->imgheight), invert);
+						uint32_t c01 = InvertColorChannels(*GetMemoryLocation(memory, ptx_int + 1, pty_int, m->imgwidth, m->imgheight), invert);
+						uint32_t c10 = InvertColorChannels(*GetMemoryLocation(memory, ptx_int, pty_int + 1, m->imgwidth, m->imgheight), invert);
+						uint32_t c11 = InvertColorChannels(*GetMemoryLocation(memory, ptx_int + 1, pty_int + 1, m->imgwidth, m->imgheight), invert);
 
 						// Bilinear interpolation
 						uint32_t doColor = lerp(lerp(c00, c01, ptx_frac), lerp(c10, c11, ptx_frac), pty_frac);
 
 						int alpha = (doColor >> 24) & 255;
 						if (alpha != 255) {
-							doColor = lerp(bkc, doColor, ((float)alpha / 255.0f));
+							uint32_t existing = *GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
+							doColor = lerp(existing, doColor, ((float)alpha / 255.0f));
 						}
 
 						*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = doColor;
-					}
-					else {
-						if (paintBG) {
-							*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = bkc;
-						}
 					}
 				});
 		});
@@ -336,7 +319,7 @@ void RenderToolbarButton(GlobalParams* m, void* data, int maxButtons, uint32_t c
 				uint32_t l = (*GetMemoryLocation(data, x + k, y, m->widthos, m->heightos));
 				int l0 = ((l & 0x00FF0000) >> 16);
 				float ll = (float)l0 / 255.0f;
-				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, p + x, 6 + y, m->width, m->height); \
+				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, p + x, 6 + y, m->width, m->height);
 					if (i != m->selectedbutton) {
 						*memoryPath = lerp(*memoryPath, color, ll * opacity); // transparency
 					}
@@ -356,11 +339,9 @@ void RenderToolbar(GlobalParams* m) {
 
 
 		//BLUR FOR TOOLBAR
-		if ((GetKeyState('N') & 0x8000) && (GetKeyState('M') & 0x8000)) {
-			gaussian_blur_f((uint32_t*)m->scrdata, m->width, m->height, 4.0, m->width, m->height);
-		}
-		else if (m->CoordTop <= m->toolheight) {
-				gaussian_blur_f((uint32_t*)m->scrdata, m->width, m->toolheight, 4.0, m->width, m->height);
+	
+		if (m->CoordTop <= m->toolheight) {
+			gaussian_blur_toolbar(m, (uint32_t*)m->scrdata);
 		}
 		else {
 
@@ -369,8 +350,7 @@ void RenderToolbar(GlobalParams* m) {
 					*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = 0x111111;
 				}
 			}
-		}
-
+			}
 
 		// TOOLBAR CONTAINER
 		for (uint32_t y = 0; y < m->toolheight; y++) {
@@ -435,7 +415,7 @@ void RenderToolbar(GlobalParams* m) {
 
 		}
 
-		PlaceNewFont(m, "v2.1", m->width - 30, 20, "C:\\Windows\\Fonts\\tahoma.ttf", 10, 0x808080);
+		PlaceNewFont(m, "v2.2", m->width - 30, 20, "C:\\Windows\\Fonts\\tahoma.ttf", 10, 0x808080);
 		
 }
 
@@ -498,9 +478,28 @@ void DrawMenu(GlobalParams* m) {
 	}
 }
 
+void RenderBK(GlobalParams* m) {
+	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
+		[&](uint32_t y) {
+			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
+			[&](uint32_t x) {
+					uint32_t bkc{};
+					// bkc
+					if (((x / 10) + (y / 10)) % 2 == 0) {
+						bkc = 0x161616;
+					}
+					else {
+						bkc = 0x0C0C0C;
+					}
+
+					*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = bkc;
+				});
+		});
+	
+}
+
 void RedrawSurface(GlobalParams* m) {
 	if (m->width < 20) { return; }
-
 	uint32_t color = 0x101010;
 
 
@@ -509,13 +508,21 @@ void RedrawSurface(GlobalParams* m) {
 		paintBG = !paintBG;
 	}
 
+	// render the background
+	if (paintBG) {
+		RenderBK(m);
+	}
+
 	// render the image
 	if (!m->loading) {
 		if (m->smoothing) {
-			PlaceImageBI(m);
+			PlaceImageBI(m, m->imgdata, true);
 		}
 		else {
-			PlaceImageNN(m);
+			PlaceImageNN(m, m->imgdata, true);
+		}
+		if (m->shouldSaveShutdown) {
+			PlaceImageBI(m, m->imgannotate, false);
 		}
 	}
 	
@@ -567,6 +574,12 @@ void RedrawSurface(GlobalParams* m) {
 
 		sprintf(str, "View Image");
 	}
+
+	// update window cursor
+
+	HCURSOR cursor = (m->drawmode) ? LoadCursor(NULL, MAKEINTRESOURCE(32631)) : LoadCursor(NULL, IDC_ARROW);
+	SetCursor(cursor);
+	ShowCursor(TRUE);
 
 	SetWindowText(m->hwnd, str);
 

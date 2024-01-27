@@ -1,6 +1,9 @@
 #include "headers/ops.h"
+#include "headers/imgload.h"
 #include "../resource.h"
 
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
 
 #pragma region File
 
@@ -92,7 +95,7 @@ void PrintImageToPrinter(uint32_t* image, int width, int height, HDC printerDC) 
 
 	uint32_t* temp = (uint32_t*)malloc(width * height * 4);
 	for (int i = 0; i < width * height; i++) {
-		*(temp+i) = InvertColorChannels((*(image+i)));
+		*(temp+i) = InvertColorChannels((*(image+i)), true);
 	}
 
 	if (!image) {
@@ -137,7 +140,34 @@ void Print(GlobalParams* m) {
 
 	// Get the printer device context
 	HDC printerDC = pd.hDC;
-	PrintImageToPrinter((uint32_t*)m->imgdata, m->imgwidth, m->imgheight, printerDC);
+
+	CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+	PrintImageToPrinter((uint32_t*)m->tempCombineBuffer, m->imgwidth, m->imgheight, printerDC);
+	FreeCombineBuffer(m);
+}
+
+void swapPointers(void*& ptr1, void*& ptr2) {
+	void* temp = ptr1;
+	ptr1 = ptr2;
+	ptr2 = temp;
+}
+
+void ResizeImageToSize(GlobalParams* m, int width, int height) {
+	m->tempResizeBuffer = malloc(width * height * 4);
+	stbir_resize_uint8_srgb((unsigned char*)m->imgdata, m->imgwidth, m->imgheight, 0, (unsigned char*)m->tempResizeBuffer, width, height, 0, 4, 0, 4);
+	free(m->imgdata);
+	m->imgwidth = width;
+	m->imgheight = height;
+	swapPointers(m->imgdata, m->tempResizeBuffer);
+	m->shouldSaveShutdown = true;
+
+	m->undoStep = 0;
+	m->undoData.clear();
+	free(m->imgannotate);
+	m->imgannotate = malloc(width * height * 4);
+	memset(m->imgannotate, 0x00, width * height * 4);
+
+	//free(to);
 }
 
 void rotateImage90Degrees(GlobalParams* m) {
@@ -248,12 +278,14 @@ void NewZoom(GlobalParams* m, float v, int mouse) {
 	RedrawSurface(m);
 }
 
-uint32_t InvertColorChannelsInverse(uint32_t d) {
-	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
-}
 
-uint32_t InvertColorChannels(uint32_t d) {
-	return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
+uint32_t InvertColorChannels(uint32_t d, bool should) {
+	if (should) {
+		return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
+	}
+	else {
+		return d;
+	}
 }
 
 static const float gammaLUTL[256] = { 0, 0.00129465, 0.00594864, 0.014515, 0.0273328, 0.0446566, 0.0666936, 0.0936197, 0.125588, 0.162737, 0.205188, 0.253055, 0.306444, 0.365449, 0.430163, 0.500671, 0.577053, 0.659386, 0.747741, 0.842189, 0.942796, 1.04963, 1.16274, 1.28219, 1.40804, 1.54035, 1.67916, 1.82453, 1.97651, 2.13514, 2.30048, 2.47256, 2.65144, 2.83715, 3.02974, 3.22925, 3.43572, 3.64918, 3.86969, 4.09726, 4.33195, 4.57379, 4.82281, 5.07905, 5.34254, 5.61331, 5.89141, 6.17685, 6.46968, 6.76991, 7.0776, 7.39275, 7.71541, 8.0456, 8.38336, 8.7287, 9.08166, 9.44227, 9.81055, 10.1865, 10.5702, 10.9617, 11.3609, 11.768, 12.1828, 12.6055, 13.0361, 13.4746, 13.921, 14.3754, 14.8377, 15.3081, 15.7864, 16.2728, 16.7672, 17.2698, 17.7804, 18.2992, 18.8261, 19.3612, 19.9044, 20.4559, 21.0156, 21.5836, 22.1598, 22.7443, 23.3372, 23.9383, 24.5479, 25.1657, 25.792, 26.4267, 27.0698, 27.7213, 28.3814, 29.0498, 29.7268, 30.4123, 31.1064, 31.8089, 32.5201, 33.2398, 33.9682, 34.7051, 35.4507, 36.205, 36.9679, 37.7395, 38.5198, 39.3088, 40.1066, 40.9131, 41.7284, 42.5524, 43.3853, 44.227, 45.0775, 45.9368, 46.805, 47.6821, 48.568, 49.4629, 50.3667, 51.2794, 52.2011, 53.1317, 54.0713, 55.0199, 55.9775, 56.9442, 57.9198, 58.9045, 59.8983, 60.9011, 61.9131, 62.9341, 63.9643, 65.0035, 66.052, 67.1096, 68.1763, 69.2523, 70.3374, 71.4317, 72.5353, 73.6481, 74.7701, 75.9014, 77.042, 78.1919, 79.351, 80.5195, 81.6973, 82.8844, 84.0809, 85.2867, 86.502, 87.7265, 88.9605, 90.2039, 91.4568, 92.719, 93.9907, 95.2718, 96.5624, 97.8625, 99.1721, 100.491, 101.82, 103.158, 104.506, 105.863, 107.23, 108.606, 109.992, 111.387, 112.792, 114.207, 115.631, 117.065, 118.509, 119.962, 121.425, 122.898, 124.38, 125.872, 127.374, 128.885, 130.406, 131.937, 133.478, 135.028, 136.589, 138.159, 139.738, 141.328, 142.927, 144.536, 146.156, 147.784, 149.423, 151.072, 152.73, 154.398, 156.077, 157.765, 159.463, 161.171, 162.889, 164.617, 166.354, 168.102, 169.86, 171.628, 173.405, 175.193, 176.991, 178.798, 180.616, 182.444, 184.281, 186.129, 187.987, 189.855, 191.733, 193.621, 195.52, 197.428, 199.346, 201.275, 203.214, 205.163, 207.122, 209.091, 211.07, 213.06, 215.059, 217.069, 219.089, 221.12, 223.16, 225.211, 227.272, 229.343, 231.425, 233.516, 235.618, 237.731, 239.853, 241.986, 244.129, 246.283, 248.447, 250.621, 252.805, 255 };
@@ -395,31 +427,9 @@ void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize
 
 
 
-int kernel[3][3] = { 1, 2, 1,
-				   2, 4, 2,
-				   1, 2, 1 };
+
+
 /*
-int accessPixel(unsigned char* arr, int col, int row, int k, int width, int height)
-{
-	int sum = 0;
-	int sumKernel = 0;
-
-	for (int j = -1; j <= 1; j++)
-	{
-		for (int i = -1; i <= 1; i++)
-		{
-			if ((row + j) >= 0 && (row + j) < height && (col + i) >= 0 && (col + i) < width)
-			{
-				int color = arr[(row + j) * 3 * width + (col + i) * 3 + k];
-				sum += color * kernel[i + 1][j + 1];
-				sumKernel += kernel[i + 1][j + 1];
-			}
-		}
-	}
-
-	return sum / sumKernel;
-}
-
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
 	unsigned char* result = (unsigned char*)malloc(width * height * 4);
 	for (int row = 0; row < height; row++)
@@ -434,19 +444,11 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 	}
 	memcpy((unsigned char*)pixels, result, (width * height*4));
 }
+
 */
 
-void gaussian_blur_f(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
 
-	int size = width * height;
-	unsigned char* result = (unsigned char*)malloc(size * 4);
-	unsigned char* px = (unsigned char*)pixels;
 
-	fast_gaussian_blur(px, result, width, lH, 4, 4.0f, 10, Border::kKernelCrop);
-
-	// it swap itself
-	delete[] px;
-}
 
 
 // Gaussian blur function
@@ -535,3 +537,83 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 
 #pragma endregion
 
+
+uint8_t clamp(int value) {
+	// Clamp the value to the range [0, 255]
+	return (uint8_t)(value < 0 ? 0 : (value > 255 ? 255 : value));
+}
+
+#include <stdint.h>
+
+
+void convolution(uint32_t* image, uint32_t* temporaryBuffer, int width, int height, int kernel[][3], int kernelSize) {
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			int redSum = 0;
+			int greenSum = 0;
+			int blueSum = 0;
+
+			// Convolution loop
+			for (int i = 0; i < kernelSize; ++i) {
+				for (int j = 0; j < kernelSize; ++j) {
+					int xOffset = x - kernelSize / 2 + i;
+					int yOffset = y - kernelSize / 2 + j;
+
+					// Ensure we are within bounds
+					if (xOffset >= 0 && xOffset < width && yOffset >= 0 && yOffset < height) {
+						// Get the RGB values of the current pixel
+						uint32_t pixel = image[yOffset * width + xOffset];
+
+						// Extract individual RGB components
+						int pixelRed = (pixel >> 16) & 0xFF;
+						int pixelGreen = (pixel >> 8) & 0xFF;
+						int pixelBlue = pixel & 0xFF;
+
+						// Apply the convolution operation
+						redSum += pixelRed * kernel[i][j];
+						greenSum += pixelGreen * kernel[i][j];
+						blueSum += pixelBlue * kernel[i][j];
+					}
+				}
+			}
+
+			// Ensure RGB values are within the valid range [0, 255]
+			redSum = (redSum < 0) ? 0 : ((redSum > 255) ? 255 : redSum);
+			greenSum = (greenSum < 0) ? 0 : ((greenSum > 255) ? 255 : greenSum);
+			blueSum = (blueSum < 0) ? 0 : ((blueSum > 255) ? 255 : blueSum);
+
+			// Pack the result back into a uint32_t
+			temporaryBuffer[y * width + x] = (redSum << 16) | (greenSum << 8) | blueSum;
+		}
+	}
+
+	// Copy the result back to the original image
+	for (int i = 0; i < width * height; ++i) {
+		image[i] = temporaryBuffer[i];
+	}
+}
+void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels) {
+
+
+	unsigned char* px = (unsigned char*)pixels;
+	unsigned char* gd = (unsigned char*)m->toolbar_gaussian_data;
+
+	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
+	fast_gaussian_blur(px, gd, m->width, m->toolheight, 4, 4.0f, 10, Border::kKernelCrop);
+	//gaussian_blur(pixels, m->width, 40, 4.0, m->width, 40, 0, 0);
+	//boxBlur(pixels, m->width, 40, 15);
+
+	//convolution((uint32_t*)m->scrdata, (uint32_t*)m->toolbar_gaussian_data, m->width, 40, kernel, 9);
+
+	std::chrono::steady_clock::time_point end = std::chrono::high_resolution_clock::now();
+
+	std::chrono::duration<double> duration = end - start;
+	std::string k0 = "Execution time: " + std::to_string(duration.count()) + " seconds.";
+
+	if (GetKeyState('V') & 0x8000) {
+		MessageBox(m->hwnd, k0.c_str(), "Time", MB_OK);
+	}
+	// it swap itself
+	//std::swap(px, gd);
+
+}

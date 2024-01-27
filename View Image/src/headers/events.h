@@ -5,6 +5,7 @@
 #include "imgload.h"
 #include "leftrightlogic.h"
 #include <string>
+#include "dialogcontrol.h"
 
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv);
 bool ToolbarMouseDown(GlobalParams* m);

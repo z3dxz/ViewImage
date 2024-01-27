@@ -47,10 +47,10 @@ void autozoom(GlobalParams* m);
 
 void NewZoom(GlobalParams* m, float v, int mouse);
 
-uint32_t InvertColorChannelsInverse(uint32_t d);
-uint32_t InvertColorChannels(uint32_t d);
+uint32_t InvertColorChannels(uint32_t d, bool should);
 uint32_t lerp(uint32_t color1, uint32_t color2, float alpha);
 
+void ResizeImageToSize(GlobalParams* m, int width, int height);
 
 
 // Gaussian function
@@ -60,5 +60,7 @@ void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize
 // Gaussian blur function
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX = 0, uint32_t offY = 0);
 
-void gaussian_blur_f(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX = 0, uint32_t offY = 0);
+void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels);
 #pragma endregion
+
+void gaussianBlurFFT(uint32_t* image, int height, int width, int kernelSize, double* kernel);

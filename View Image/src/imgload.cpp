@@ -4,6 +4,7 @@
 #include "headers/leftrightlogic.h"
 #include "stb_image_write.h"
 #include "headers/ops.h"
+#include <shlobj.h>
 
 bool CheckIfStandardFile(const char* filepath) {
 	return (isFile(filepath, ".jpeg") || isFile(filepath, ".jpg") || isFile(filepath, ".png") ||
@@ -60,7 +61,7 @@ std::string FileSaveDialog(HWND hwnd) {
 	ofn.nMaxFile = sizeof(szFileName);
 	ofn.nMaxFile = MAX_PATH;
 	ofn.lpstrDefExt = "png";
-	ofn.lpstrTitle = "Save as a PNG File";
+	ofn.lpstrTitle = "Save as a PNG File | Warning: This will apply any draft annotations";
 	ofn.Flags = OFN_OVERWRITEPROMPT;
 
 	if (GetSaveFileName(&ofn)) {
@@ -70,14 +71,51 @@ std::string FileSaveDialog(HWND hwnd) {
 	return "Invalid";
 }
 
+void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width, int height, bool invert) {
+
+	m->tempCombineBuffer = (uint32_t*)malloc(width * height * 4);
+	
+	for (int i = 0; i < width * height; i++) {
+		uint8_t alpha = (second[i] >> 24) & 0xFF;
+		uint8_t invAlpha = 255 - alpha;
+
+		uint8_t backgroundRed = (first[i] >> 16) & 0xFF;
+		uint8_t backgroundGreen = (first[i] >> 8) & 0xFF;
+		uint8_t backgroundBlue = first[i] & 0xFF;
+
+		uint8_t overlayRed = (second[i] >> 16) & 0xFF;
+		uint8_t overlayGreen = (second[i] >> 8) & 0xFF;
+		uint8_t overlayBlue = second[i] & 0xFF;
+		if (invert) {
+			overlayRed = second[i] & 0xFF;
+			overlayGreen = (second[i] >> 8) & 0xFF;
+			overlayBlue = (second[i] >> 16) & 0xFF;
+		}
+
+		uint8_t resultRed = (alpha * overlayRed + invAlpha * backgroundRed) / 255;
+		uint8_t resultGreen = (alpha * overlayGreen + invAlpha * backgroundGreen) / 255;
+		uint8_t resultBlue = (alpha * overlayBlue + invAlpha * backgroundBlue) / 255;
+
+
+		*(m->tempCombineBuffer+i) = (resultRed << 16) | (resultGreen << 8) | resultBlue | 0xFF000000; // Full alpha
+	}
+}
+
+void FreeCombineBuffer(GlobalParams* m) {
+	if (m->tempCombineBuffer) {
+		free(m->tempCombineBuffer);
+	}
+}
+
 void PrepareSaveImage(GlobalParams* m) {
 	std::string res = FileSaveDialog(m->hwnd);
 	if (res != "Invalid") {
 
 		m->loading = true;
 		RedrawSurface(m);
-		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
-
+		CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->tempCombineBuffer, 0);
+		FreeCombineBuffer(m);
 		m->loading = false;
 		m->shouldSaveShutdown = false;
 		RedrawSurface(m);
@@ -105,7 +143,11 @@ bool doIFSave(GlobalParams* m) {
 }
 
 bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
+	m->undoData.clear();
+	m->undoStep = 0;
 	m->drawmode = false;
+	m->drawmousedown = false;
+
 	if (!isLeftRight) {
 		clear_kvector();
 	}
@@ -122,9 +164,13 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	if (m->imgdata) {
 		free(m->imgdata);
 	}
+	if (m->imgannotate) {
+		free(m->imgannotate);
+	}
 
 	if (CheckIfStandardFile(kpath.c_str())) {
 		m->imgdata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
+		
 	}
 	else {
 
@@ -187,6 +233,10 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 		m->imgheight = 0;
 
 	}
+
+	m->imgannotate = malloc(m->imgwidth * m->imgheight * 4);
+
+	memset(m->imgannotate, 0x00, m->imgwidth * m->imgheight * 4);
 
 	// Auto-zoom
 	autozoom(m);

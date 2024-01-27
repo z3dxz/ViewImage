@@ -24,6 +24,12 @@ GlobalParams gp;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
+// Welcome! The program starts here. If you have any questions about the code, please talk to me at github.com
+
+// Note: Although the code is C++, the code is mostly in C style. Object oriented programming is not apparent and "classes" are just
+// structs being passed through arguments
+
+
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
 
 
@@ -40,7 +46,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	wc.lpszClassName = CLASS_NAME;
 	wc.lpfnWndProc = WndProc;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	//wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 
 	RegisterClassEx(&wc);
