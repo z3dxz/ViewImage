@@ -83,7 +83,7 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
             if (width < 0 || height < 0) {
                 MessageBox(hwnd, "You really though you could get away with having a negative width or height", "Error", MB_OK | MB_ICONERROR);
                 return TRUE; // Do not proceed with resizing
-            }
+            } 
 
             // Perform resizing logic with width and height
             ResizeImageToSize(m, width, height);
