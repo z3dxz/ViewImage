@@ -151,10 +151,11 @@ void swapPointers(void*& ptr1, void*& ptr2) {
 	ptr1 = ptr2;
 	ptr2 = temp;
 }
+/*
 
 void ResizeImageToSize(GlobalParams* m, int width, int height) {
 	m->tempResizeBuffer = malloc(width * height * 4);
-	stbir_resize_uint8_srgb((unsigned char*)m->imgdata, m->imgwidth, m->imgheight, 0, (unsigned char*)m->tempResizeBuffer, width, height, 0, 4, 0, 4);
+	stbir_resize_uint8((unsigned char*)m->imgdata, m->imgwidth, m->imgheight, 0, (unsigned char*)m->tempResizeBuffer, width, height, 0, 4);
 	free(m->imgdata);
 	m->imgwidth = width;
 	m->imgheight = height;
@@ -166,11 +167,71 @@ void ResizeImageToSize(GlobalParams* m, int width, int height) {
 	free(m->imgannotate);
 	m->imgannotate = malloc(width * height * 4);
 	memset(m->imgannotate, 0x00, width * height * 4);
-
+	autozoom(m);
 	//free(to);
 }
+*/
+
+void ResizeImageToSize(GlobalParams* m, int width, int height) {
+	CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+	free(m->imgdata);
+	m->imgdata = malloc(width * height * 4);
+	stbir_resize_uint8((unsigned char*)m->tempCombineBuffer, m->imgwidth, m->imgheight, 0, (unsigned char*)m->imgdata, width, height, 0, 4);
+	m->imgwidth = width;
+	m->imgheight = height;
+	m->shouldSaveShutdown = true;
+
+	m->undoStep = 0;
+	m->undoData.clear();
+	free(m->imgannotate);
+	m->imgannotate = malloc(width * height * 4);
+	memset(m->imgannotate, 0x00, width * height * 4);
+	autozoom(m);
+	FreeCombineBuffer(m);
+	//free(to);
+
+}
+
 
 void rotateImage90Degrees(GlobalParams* m) {
+
+	//
+	// 
+	// 
+
+	int width = m->imgheight;
+	int height = m->imgwidth; // reverse it
+
+	CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+	free(m->imgdata);
+	m->imgdata = malloc(width * height * 4);
+
+	// do
+	for (size_t y = 0; y < height; y++) {
+		for (size_t x = 0; x < width; x++) {
+			*GetMemoryLocation(m->imgdata, x, y, width, height) = *GetMemoryLocation(m->tempCombineBuffer, y, width - 1 - x, m->imgwidth, m->imgheight);
+		}
+	}
+
+	m->imgwidth = width;
+	m->imgheight = height;
+	m->shouldSaveShutdown = true;
+
+	m->undoStep = 0;
+	m->undoData.clear();
+	free(m->imgannotate);
+	m->imgannotate = malloc(width * height * 4);
+	memset(m->imgannotate, 0x00, width * height * 4);
+	autozoom(m);
+	FreeCombineBuffer(m);
+	RedrawSurface(m);
+
+}
+/*
+
+	//free(to);
+
+	//
 	// Update width and height after rotation
 	size_t newWidth = m->imgheight;
 	size_t newHeight = m->imgwidth;
@@ -195,6 +256,7 @@ void rotateImage90Degrees(GlobalParams* m) {
 	m->shouldSaveShutdown = true;
 	RedrawSurface(m);
 }
+*/
 
 int GetButtonInterval(GlobalParams* m) {
 	return m->iconSize + 5;
@@ -545,53 +607,6 @@ uint8_t clamp(int value) {
 
 #include <stdint.h>
 
-
-void convolution(uint32_t* image, uint32_t* temporaryBuffer, int width, int height, int kernel[][3], int kernelSize) {
-	for (int y = 0; y < height; ++y) {
-		for (int x = 0; x < width; ++x) {
-			int redSum = 0;
-			int greenSum = 0;
-			int blueSum = 0;
-
-			// Convolution loop
-			for (int i = 0; i < kernelSize; ++i) {
-				for (int j = 0; j < kernelSize; ++j) {
-					int xOffset = x - kernelSize / 2 + i;
-					int yOffset = y - kernelSize / 2 + j;
-
-					// Ensure we are within bounds
-					if (xOffset >= 0 && xOffset < width && yOffset >= 0 && yOffset < height) {
-						// Get the RGB values of the current pixel
-						uint32_t pixel = image[yOffset * width + xOffset];
-
-						// Extract individual RGB components
-						int pixelRed = (pixel >> 16) & 0xFF;
-						int pixelGreen = (pixel >> 8) & 0xFF;
-						int pixelBlue = pixel & 0xFF;
-
-						// Apply the convolution operation
-						redSum += pixelRed * kernel[i][j];
-						greenSum += pixelGreen * kernel[i][j];
-						blueSum += pixelBlue * kernel[i][j];
-					}
-				}
-			}
-
-			// Ensure RGB values are within the valid range [0, 255]
-			redSum = (redSum < 0) ? 0 : ((redSum > 255) ? 255 : redSum);
-			greenSum = (greenSum < 0) ? 0 : ((greenSum > 255) ? 255 : greenSum);
-			blueSum = (blueSum < 0) ? 0 : ((blueSum > 255) ? 255 : blueSum);
-
-			// Pack the result back into a uint32_t
-			temporaryBuffer[y * width + x] = (redSum << 16) | (greenSum << 8) | blueSum;
-		}
-	}
-
-	// Copy the result back to the original image
-	for (int i = 0; i < width * height; ++i) {
-		image[i] = temporaryBuffer[i];
-	}
-}
 void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels) {
 
 
@@ -610,10 +625,25 @@ void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels) {
 	std::chrono::duration<double> duration = end - start;
 	std::string k0 = "Execution time: " + std::to_string(duration.count()) + " seconds.";
 
-	if (GetKeyState('V') & 0x8000) {
-		MessageBox(m->hwnd, k0.c_str(), "Time", MB_OK);
-	}
+
 	// it swap itself
 	//std::swap(px, gd);
 
+}
+
+
+double remap(double value, double fromLow, double fromHigh, double toLow, double toHigh) {
+	// Check for invalid input ranges
+	if (fromLow == fromHigh) {
+		std::cerr << "Error: 'from' range is degenerate (fromLow == fromHigh)" << std::endl;
+		return value;  // Return the input value unchanged
+	}
+
+	// Map the value from the 'from' range to the 'to' range
+	double result = toLow + (value - fromLow) * (toHigh - toLow) / (fromHigh - fromLow);
+
+	// Clamp the result to the 'to' range
+	result = min(max(result, toLow), toHigh);
+
+	return result;
 }

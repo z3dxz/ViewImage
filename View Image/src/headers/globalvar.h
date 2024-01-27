@@ -73,6 +73,9 @@ struct GlobalParams {
 		int lastMouseX;
 		int lastMouseY;
 
+		int lastMoveX;
+		int lastMoveY;
+
 	bool fullscreen = false;
 	WINDOWPLACEMENT wpPrev;
 
@@ -95,9 +98,13 @@ struct GlobalParams {
 	// drawing/annotating
 
 	bool drawmode = false;
-	uint32_t a_drawColor = 0x800000;
-	float a_relativeSize = 0.02f;
-	int a_hardness = 50;
-	int a_frost = 10;
+	uint32_t a_drawColor = 0x20202CC;
+	float drawSize = 20;
+	int a_hardness = 90;
+	int a_frost = 5;
 	float a_opacity = 0.04f;
+
+	bool isAnnotationCircleShown = false;
+
+	bool pinkTestCenter = false;
 };

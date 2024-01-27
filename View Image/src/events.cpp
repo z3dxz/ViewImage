@@ -34,7 +34,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	
 	if (argc >= 2) {
 		if (!OpenImageFromPath(m, path, false)) {
-			MessageBox(m->hwnd, "Unable to open image", "Error", MB_OK);
+			MessageBox(m->hwnd, "Unable to open image", "Error", MB_OK | MB_ICONERROR);
 			exit(0);
 			return false;
 		}
@@ -54,8 +54,13 @@ bool ToolbarMouseDown(GlobalParams* m) {
 	}
 	m->toolmouseDown = true;
 	if (m->drawmode) {
-		m->drawmousedown = true;
-		createUndoStep(m);
+		POINT mPP;
+		GetCursorPos(&mPP);
+		ScreenToClient(m->hwnd, &mPP);
+		if(mPP.y > m->toolheight && mPP.x>= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom){
+			m->drawmousedown = true;
+			createUndoStep(m);
+		}
 	}
 
 	POINT mPP;
@@ -102,7 +107,7 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		rotateImage90Degrees(m);
 		//OpenImageFromPath(m, cpath.c_str());
 
-		//MessageBox(hwnd, "I haven't added this feature yet", "Can't rotate image", MB_OK);
+		//MessageBox(hwnd, "I haven't added this feature yet", "Can't rotate image", MB_OK | MB_ICONERROR);
 		return 0;
 	case 7: {
 		// draw
@@ -172,7 +177,7 @@ void MouseDown(GlobalParams* m) {
 
 	}
 	else {
-
+		
 		m->isMenuState = false;
 		RedrawSurface(m);
 	}
@@ -221,7 +226,7 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 	for (int i = 0; i < samples0; i++) {
 
 		// drawing
-		int size = ((float)m->imgheight * m->a_relativeSize);
+		int size = m->drawSize;
 		int halfsize = size / 2;
 
 		for (int y = 0; y < size; y++) {
@@ -236,7 +241,7 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 					if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
 						// drawing
 						if (!m->imgannotate) {
-							MessageBox(m->hwnd, "Contact the developer for a solution", "Drawing Major Error", MB_OK);
+							MessageBox(m->hwnd, "Contact the developer for a solution", "Drawing Major Error", MB_OK | MB_ICONERROR);
 							exit(0);
 						}
 
@@ -256,7 +261,10 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 	RedrawSurface(m);
 }
 
+bool beforeas = false;
+
 void MouseMove(GlobalParams* m) {
+	
 	POINT pos = { 0 };
 	GetCursorPos(&pos);
 
@@ -266,13 +274,11 @@ void MouseMove(GlobalParams* m) {
 	}
 	else if (m->mouseDown) {
 
-		
-
-			m->iLocX = m->lockimgoffx - (m->LockmPos.x - pos.x);
-			m->iLocY = m->lockimgoffy - (m->LockmPos.y - pos.y);
-
+		m->iLocX = m->lockimgoffx - (m->LockmPos.x - pos.x);
+		m->iLocY = m->lockimgoffy - (m->LockmPos.y - pos.y);
 
 		RedrawSurface(m);
+		
 	}
 	else {
 
@@ -281,7 +287,10 @@ void MouseMove(GlobalParams* m) {
 		if (pos.y <= m->toolheight) {
 			m->lock = true;
 			m->selectedbutton = getXbuttonID(m, pos);
+			HRGN rgn = CreateRectRgn(0, 0, m->width, m->toolheight+24);
+			SelectClipRgn(m->hdc, rgn);
 			RedrawSurface(m);
+			SelectClipRgn(m->hdc, NULL);
 		}
 		else {
 			if (m->lock) {
@@ -291,16 +300,77 @@ void MouseMove(GlobalParams* m) {
 			}
 		}
 	}
-	if (m->isMenuState) {
+
+#pragma region Cusor
+	HCURSOR cursor = LoadCursor(NULL, IDC_ARROW);
+	bool isInMenu = ((pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY))) && m->isMenuState;
+	bool isInImage = pos.y > m->toolheight && pos.x >= m->CoordLeft && pos.y >= m->CoordTop && pos.x < m->CoordRight && pos.y < m->CoordBottom;
+
+	bool as = false;
+	if (m->drawmode && isInImage && !isInMenu) {
+		cursor = LoadCursor(GetModuleHandle(0), MAKEINTRESOURCE(IDC_CURSOR1));
+		as = true;
+	}
+	m->isAnnotationCircleShown = as;
+	if (beforeas != as) {
 		RedrawSurface(m);
 	}
+
+	if (m->drawmode && as) {
+		int redrawmargins = 20;
+
+		// first
+		int d = m->mscaler * m->drawSize;
+		int r = d / 2;
+
+		int locationx = -redrawmargins - (int)(r)+m->lastMoveX;
+		int locationy = -redrawmargins - (int)(r)+m->lastMoveY;
+		int sizex = d + redrawmargins * 2;
+		int sizey = d + redrawmargins * 2;
+		HRGN rgn = CreateRectRgn(locationx, locationy, locationx + sizex, locationy + sizey);
+		SelectClipRgn(m->hdc, rgn);
+		RedrawSurface(m);
+		SelectClipRgn(m->hdc, NULL);
+		// second
+		{
+
+			int d = m->mscaler * m->drawSize;
+			int r = d / 2;
+
+			int locationx = -redrawmargins - (int)(r)+pos.x;
+			int locationy = -redrawmargins - (int)(r)+pos.y;
+			int sizex = d + redrawmargins * 2;
+			int sizey = d + redrawmargins * 2;
+			HRGN rgn = CreateRectRgn(locationx, locationy, locationx + sizex, locationy + sizey);
+			SelectClipRgn(m->hdc, rgn);
+			RedrawSurface(m);
+			SelectClipRgn(m->hdc, NULL);
+		}
+	}
+
+	if (m->isMenuState) {
+		HRGN rgn = CreateRectRgn(m->menuX, m->menuY, m->menuX + m->menuSX, m->menuY + m->menuSY);
+		SelectClipRgn(m->hdc, rgn);
+		RedrawSurface(m);
+		SelectClipRgn(m->hdc, NULL);
+	}
+
+
+	SetCursor(cursor);
+	ShowCursor(TRUE);
+	m->lastMoveX = pos.x;
+	m->lastMoveY = pos.y;
+	beforeas = as;
+#pragma endregion
+
+	
 }
 
 bool classUndo = true;
 void createUndoStep(GlobalParams* m) {
     uint32_t* thisImage = (uint32_t*)malloc(m->imgwidth * m->imgheight * 4);
     if (!thisImage) {
-        MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK);
+        MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK | MB_ICONERROR);
         exit(0);
     }
     memcpy(thisImage, (uint32_t*)m->imgannotate, m->imgwidth * m->imgheight * 4);
@@ -344,13 +414,44 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	if (wparam == 'Z' && GetKeyState(VK_CONTROL) & 0x8000) {
 		// undo
 		UndoBus(m);
+		RedrawSurface(m);
+	}
+
+	if (wparam == 'S' && GetKeyState(VK_CONTROL) & 0x8000) {
+		// save
+		PrepareSaveImage(m);
+	}
+
+	if (wparam == 'U' && GetKeyState(VK_CONTROL) & 0x8000 && GetKeyState(VK_SPACE) & 0x8000) {
+		// undo
+		m->pinkTestCenter = true;
+		RedrawSurface(m);
+
+		m->pinkTestCenter = false;
+	}
+	if (wparam == 'R' && GetKeyState(VK_CONTROL) & 0x8000) {
+		// resize
+		ShowResizeDialog(m);
 	}
 	if (wparam == 'Y' && GetKeyState(VK_CONTROL) & 0x8000) {
 		// undo
 		RedoBus(m);
+		RedrawSurface(m);
 	}
+	/*
+	* // weird blur thing
+	if (wparam == 'H' && GetKeyState(VK_CONTROL) & 0x8000) {
+		for (int y = 1000; y > 50; y -= 2) {
+			ResizeImageToSize(m, y,y);
+		}
+		
+		RedrawSurface(m);
+	}
+	*/
+	
 	if (wparam == 'G') {
 		m->drawmode = !m->drawmode;
+		RedrawSurface(m);
 	}
 	if (wparam == VK_F11) {
 		if (m->fullscreen) {
@@ -386,6 +487,7 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			m->loading = false;
 			m->halt = false;
 		}
+		RedrawSurface(m);
 	}
 	if (wparam == VK_RIGHT) {
 		if (!m->loading && !m->halt && m->imgwidth > 0) {
@@ -403,43 +505,52 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			m->loading = false;
 			m->halt = false;
 		}
+		RedrawSurface(m);
 	}
 
 	if (wparam == 'F') {
 		PrepareOpenImage(m);
+		RedrawSurface(m);
 	}
 
 	if (wparam == '1') {
 		m->mscaler = 1.0f;
+		RedrawSurface(m);
 	}
 
 	if (wparam == '2') {
 		m->mscaler = 2.0f;
+		RedrawSurface(m);
 	}
 	if (wparam == '3') {
 		m->mscaler = 0.5f;
+		RedrawSurface(m);
 	}
 
 	if (wparam == '4') {
 		m->mscaler = 4.0f;
+		RedrawSurface(m);
 	}
 
 	if (wparam == '5') {
 		autozoom(m);
+		RedrawSurface(m);
 	}
 
 	if (wparam == '6') {
 		m->mscaler = 0.25f;
+		RedrawSurface(m);
 	}
 
 	if (wparam == '7') {
 		m->mscaler = 0.125f;
+		RedrawSurface(m);
 	}
 
 	if (wparam == '8') {
 		m->mscaler = 8.0f;
+		RedrawSurface(m);
 	}
-	RedrawSurface(m);
 }
 
 void MouseUp(GlobalParams* m) {
@@ -472,25 +583,24 @@ void RightUp(GlobalParams* m) {
 	ScreenToClient(m->hwnd, &pos);
 		m->menuVector = {
 
-			{"Resave Image",
-				[m]() -> bool {
-					PrepareSaveImage(m);
-					return true;
-				},
-			},
-
 			
-
-			{"Toggle Annotate",
-				[m]() -> bool {
-					m->drawmode = !m->drawmode;
-					return true;
-				},
-			},
-
-			{"Toggle Smoothing",
+			{"Toggle Smoothing{s}",
 				[m]() -> bool {
 					m->smoothing = !m->smoothing;
+					return true;
+				},
+			},
+
+			{"Undo",
+				[m]() -> bool {
+					UndoBus(m);
+					return true;
+				},
+			},
+
+			{"Redo{s}",
+				[m]() -> bool {
+					RedoBus(m);
 					return true;
 				},
 			},
@@ -502,19 +612,14 @@ void RightUp(GlobalParams* m) {
 					return true;
 				},
 			},
-
-			{"Force Exit (No Save)",
-				[m]() -> bool {
-					exit(0);
-					return true;
-				},
-			},
 		
 		};
 		m->menuX = (pos.x > (m->width-m->menuSX)) ? (m->width - m->menuSX) : pos.x;
 		m->menuY = (pos.y > (m->height - m->menuSY)) ? (m->height - m->menuSY) : pos.y;
 		m->isMenuState = true;
+
 		RedrawSurface(m);
+		//SelectClipRgn(m->hdc, NULL);
 }
 
 void Size(GlobalParams* m) {

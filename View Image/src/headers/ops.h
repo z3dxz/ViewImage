@@ -12,11 +12,12 @@
 
 #pragma region Memory
 
+double remap(double value, double fromLow, double fromHigh, double toLow, double toHigh);
 #define GetMemoryLocation(start, x, y, widthfactor, heightfactor) \
-	 (( (((y) * (widthfactor)) + (x)) < (widthfactor*heightfactor) ) ? ((uint32_t*)(start) + ((y) * (widthfactor)) + (x))  : ((uint32_t*)(start)) ) 
+	 (( (((y) * (widthfactor)) + (x)) < (widthfactor*heightfactor) &&      ( (((y)*(widthfactor)) + (x)) > 0  )            ) ? ((uint32_t*)(start) + ((y) * (widthfactor)) + (x))  : ((uint32_t*)(start)) ) 
 
 #define GetMemoryLocationTemplate(start, x, y, widthfactor, heightfactor) \
-	 (( (((y) * (widthfactor)) + (x)) < (widthfactor*heightfactor) ) ? ((start) + ((y) * (widthfactor)) + (x))  : ((start)) ) 
+	 ((( (((y) * (widthfactor)) + (x)) < (widthfactor*heightfactor))&&((y) * (widthfactor)) + (x) > start) ) ? ((start) + ((y) * (widthfactor)) + (x))  : ((start)) ) 
 
 #pragma endregion
 

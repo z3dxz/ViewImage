@@ -8,15 +8,55 @@
 FT_Library ft;
 FT_Face face;
 
+
+void CircleGenerator(int circleDiameter, int locX, int locY, int outlineThickness, int smoothening, uint32_t* backgroundBuffer, uint32_t foregroundColor, float opacity, int backgroundWidth, int backgroundHeight) {
+	float circleD = (float)circleDiameter;
+
+	float circleR = circleD / 2;
+
+	float smoothenings = (float)smoothening;
+
+	float circleBrushSize = (outlineThickness);
+
+	int margin = 5;
+	float margins = margin;
+	for (int y = 0; y < circleD + margins; y++) {
+		for (int x = 0; x < circleD + margins; x++) {
+			
+			float solution = pow(x - circleR - margins, 2) + pow(y - circleR - margins, 2);
+
+			float color = remap(solution, 0, pow(circleR, 2), 0, 1);
+
+			float min0 = remap(circleD - smoothenings, 0, circleD, 0, 1);
+			float max0 = remap(circleD, 0, circleD, 0, 1);
+
+			float min1 = remap(circleD - smoothenings - circleBrushSize, 0, circleD, 0, 1);
+			float max1 = remap(circleD - circleBrushSize, 0, circleD, 0, 1);
+
+			float color_outside = remap(color, min0, max0, 0, 1);
+			float color_inside = remap(color, min1, max1, 0, 1);
+
+			float fcolor = color_inside - color_outside;
+
+			int pixelX = x - margin - (int)circleR + locX;
+			int pixelY = y - margin - (int)circleR + locY;
+			if ((pixelX >= 0 && pixelX < backgroundWidth) && (pixelY >= 0 && pixelY < backgroundHeight)) {
+				uint32_t* backgroundLocation = GetMemoryLocation(backgroundBuffer, pixelX, pixelY, backgroundWidth, backgroundHeight);
+				*backgroundLocation = lerp(*backgroundLocation, foregroundColor, (fcolor*opacity));
+			}
+		}
+	}
+}
+
 bool InitFont(HWND hwnd, const char* font, int size) {
 
 	if (FT_Init_FreeType(&ft)) {
-		MessageBox(hwnd, "Failed to initialize FreeType library\n", "Error", MB_OK);
+		MessageBox(hwnd, "Failed to initialize FreeType library\n", "Error", MB_OK | MB_ICONERROR);
 		return false;
 	}
 
 	if (FT_New_Face(ft, font, 0, &face)) {
-		MessageBox(hwnd, "Failed to load font\n", "Error", MB_OK);
+		MessageBox(hwnd, "Failed to load font\n", "Error", MB_OK | MB_ICONERROR);
 		return false;
 	}
 
@@ -25,14 +65,14 @@ bool InitFont(HWND hwnd, const char* font, int size) {
 }
 
 const char* strtable[] {
-	"Open Image",
-	"Save as PNG",
+	"Open Image (F)",
+	"Save as PNG (CTRL+S)",
 	"Zoom In",
 	"Zoom Out",
 	"Zoom Auto",
 	"Zoom 1:1 (100%)",
 	"Rotate",
-	"Annotate",
+	"Annotate (G)",
 	"DELETE image",
 	"Print",
 	"Information"
@@ -436,10 +476,10 @@ void DrawMenu(GlobalParams* m) {
 	int mH = m->mH;
 
 	int miX = 150;
-	int miY = (m->menuVector.size()*mH)+ m->menuVector.size();
+	int miY = (m->menuVector.size() * mH) + m->menuVector.size();
 
 	m->menuSX = miX;
-	m->menuSY = miY-2; // FIX-Crash when on border
+	m->menuSY = miY - 2; // FIX-Crash when on border
 
 	int posX = m->menuX;
 	int posY = m->menuY;
@@ -497,6 +537,27 @@ void RenderBK(GlobalParams* m) {
 		});
 	
 }
+
+void drawCircle(int x, int y, int radius, uint32_t* imageBuffer, int imageWidth) {
+	// Ensure non-negative radius
+	if (radius < 0) {
+		return;
+	}
+
+	for (int i = 0; i <= 360; ++i) {
+		double radians = i * 3.141592 / 180.0;
+
+		int circleX = static_cast<int>(x + radius * std::cos(radians));
+		int circleY = static_cast<int>(y + radius * std::sin(radians));
+
+		// Check if the calculated coordinates are within the image boundaries
+		if (circleX >= 0 && circleX < imageWidth && circleY >= 0) {
+			// Assuming the image is a linear buffer with each pixel represented by a uint32_t
+			imageBuffer[circleY * imageWidth + circleX] = 0xFFFFFFFF; // Set pixel color to white
+		}
+	}
+}
+
 
 void RedrawSurface(GlobalParams* m) {
 	if (m->width < 20) { return; }
@@ -561,7 +622,31 @@ void RedrawSurface(GlobalParams* m) {
 		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 	}
 
+	// draw test circle
+	if (m->isAnnotationCircleShown) {
+		CircleGenerator(m->drawSize * m->mscaler, p.x, p.y, 12, 4, (uint32_t*)m->scrdata, 0x000000, 1.0f, m->width, m->height);
+		CircleGenerator(m->drawSize * m->mscaler-2, p.x, p.y, 5, 4, (uint32_t*)m->scrdata, 0xFFFFFF, 0.5f, m->width, m->height);
+		
+	}
+	/*
+	CircleGenerator(10, m->CoordLeft, m->CoordTop, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
+	CircleGenerator(10, m->CoordRight, m->CoordTop, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
+
+	CircleGenerator(10, m->CoordLeft, m->CoordBottom, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
+	CircleGenerator(10, m->CoordRight, m->CoordBottom, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
+	*/
+	
 	//InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14); // why did I even put this here? it just causes a memory leak and does nothing
+
+
+	if (m->pinkTestCenter) {
+		for (int y = 0; y < m->height; y++) {
+			for (int x = 0; x < m->width; x++) {
+				*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = 0xFF00FF;
+			}
+		}
+	}
+
 
 	// Update window title
 
@@ -574,12 +659,6 @@ void RedrawSurface(GlobalParams* m) {
 
 		sprintf(str, "View Image");
 	}
-
-	// update window cursor
-
-	HCURSOR cursor = (m->drawmode) ? LoadCursor(NULL, MAKEINTRESOURCE(32631)) : LoadCursor(NULL, IDC_ARROW);
-	SetCursor(cursor);
-	ShowCursor(TRUE);
 
 	SetWindowText(m->hwnd, str);
 

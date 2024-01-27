@@ -26,20 +26,17 @@ void* GetStandardBitmap(GlobalParams* m, const char* standardPath, int* w, int* 
 		id = stbi_load(standardPath, w, h, &channels, 4);
 
 		if (!id) {
-			MessageBox(m->hwnd, "Unable to load primary image", "Unknown Error", MB_OK);
+			MessageBox(m->hwnd, "Unable to load primary image", "Unknown Error", MB_OK | MB_ICONERROR);
 			return 0;
 		}
 	}
 	else {
-		MessageBox(m->hwnd, "Failed to load because the provided file path is not in standard format", "Failed to load", MB_OK);
+		MessageBox(m->hwnd, "Failed to load because the provided file path is not in standard format", "Failed to load", MB_OK | MB_ICONERROR);
 		return 0;
 	}
 	return id;
 }
 
-void ShowMessageBox(const std::string& message) {
-	MessageBoxA(NULL, message.c_str(), "Folder Name", MB_OK);
-}
 
 
 std::string FileSaveDialog(HWND hwnd) {
@@ -75,30 +72,73 @@ void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width
 
 	m->tempCombineBuffer = (uint32_t*)malloc(width * height * 4);
 	
-	for (int i = 0; i < width * height; i++) {
-		uint8_t alpha = (second[i] >> 24) & 0xFF;
-		uint8_t invAlpha = 255 - alpha;
+	for (int i = 0; i < width * height; ++i) {
+		// Extract RGBA values for each pixel from the first image
+		uint8_t alphaFirst = (first[i] >> 24) & 0xFF;
+		uint8_t redFirst = (first[i] >> 16) & 0xFF;
+		uint8_t greenFirst = (first[i] >> 8) & 0xFF;
+		uint8_t blueFirst = first[i] & 0xFF;
 
-		uint8_t backgroundRed = (first[i] >> 16) & 0xFF;
-		uint8_t backgroundGreen = (first[i] >> 8) & 0xFF;
-		uint8_t backgroundBlue = first[i] & 0xFF;
-
-		uint8_t overlayRed = (second[i] >> 16) & 0xFF;
-		uint8_t overlayGreen = (second[i] >> 8) & 0xFF;
-		uint8_t overlayBlue = second[i] & 0xFF;
+		// Extract RGBA values for each pixel from the second image
+		uint8_t alphaSecond = (second[i] >> 24) & 0xFF;
+		uint8_t redSecond = (second[i] >> 16) & 0xFF;
+		uint8_t greenSecond = (second[i] >> 8) & 0xFF;
+		uint8_t blueSecond = second[i] & 0xFF;
 		if (invert) {
-			overlayRed = second[i] & 0xFF;
-			overlayGreen = (second[i] >> 8) & 0xFF;
-			overlayBlue = (second[i] >> 16) & 0xFF;
+			redSecond = second[i] & 0xFF;
+			greenSecond = (second[i] >> 8) & 0xFF;
+			blueSecond = (second[i] >> 16) & 0xFF;
+
 		}
 
-		uint8_t resultRed = (alpha * overlayRed + invAlpha * backgroundRed) / 255;
-		uint8_t resultGreen = (alpha * overlayGreen + invAlpha * backgroundGreen) / 255;
-		uint8_t resultBlue = (alpha * overlayBlue + invAlpha * backgroundBlue) / 255;
+		// Calculate the overlay alpha
+		uint8_t overlayAlpha = alphaFirst + alphaSecond * (255 - alphaFirst) / 255;
 
+		// Perform alpha blend
+		uint32_t blendedAlpha = alphaFirst + alphaSecond;
+		if (blendedAlpha > 255) {
+			blendedAlpha = 255;
+		}
 
-		*(m->tempCombineBuffer+i) = (resultRed << 16) | (resultGreen << 8) | resultBlue | 0xFF000000; // Full alpha
+		float alphaCombine = (float)alphaSecond / 255;
+		uint8_t blendedRed = (1 - (alphaCombine)) * redFirst + (alphaCombine)*redSecond;//(redFirst * alphaFirst + redSecond * alphaSecond * (255 - alphaFirst) / (255 * overlayAlpha));
+		uint8_t blendedGreen = (1 - (alphaCombine)) * greenFirst + (alphaCombine)*greenSecond;//(greenFirst * alphaFirst + greenSecond * alphaSecond * (255 - alphaFirst) / (255 * overlayAlpha));
+		uint8_t blendedBlue = (1 - (alphaCombine)) * blueFirst + (alphaCombine)*blueSecond;//(blueFirst * alphaFirst + blueSecond * alphaSecond * (255 - alphaFirst) / (255 * overlayAlpha));
+
+		// Combine the RGBA values and store in the result buffer
+		m->tempCombineBuffer[i] = ((uint8_t)blendedAlpha << 24) | (blendedRed << 16) | (blendedGreen << 8) | blendedBlue;
+		
 	}
+		/*
+		* 
+
+		for (int i = 0; i < width * height; i++) {
+			uint8_t alpha = (second[i] >> 24) & 0xFF;
+			uint8_t invAlpha = 255 - alpha;
+
+			uint8_t backgroundRed = (first[i] >> 16) & 0xFF;
+			uint8_t backgroundGreen = (first[i] >> 8) & 0xFF;
+			uint8_t backgroundBlue = first[i] & 0xFF;
+			uint8_t backgroundA = (first[i] >> 24) & 0xFF;
+
+			uint8_t overlayRed = (second[i] >> 16) & 0xFF;
+			uint8_t overlayGreen = (second[i] >> 8) & 0xFF;
+			uint8_t overlayBlue = second[i] & 0xFF;
+			if (invert) {
+				overlayRed = second[i] & 0xFF;
+				overlayGreen = (second[i] >> 8) & 0xFF;
+				overlayBlue = (second[i] >> 16) & 0xFF;
+			}
+
+			uint8_t resultRed = (alpha * overlayRed + invAlpha * backgroundRed) / 255;
+			uint8_t resultGreen = (alpha * overlayGreen + invAlpha * backgroundGreen) / 255;
+			uint8_t resultBlue = (alpha * overlayBlue + invAlpha * backgroundBlue) / 255;
+
+
+			*(m->tempCombineBuffer+i) = (resultRed << 16) | (resultGreen << 8) | resultBlue | backgroundA; // Full alpha
+		}
+		*/
+	
 }
 
 void FreeCombineBuffer(GlobalParams* m) {
@@ -181,7 +221,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 		HANDLE hFind = FindFirstFileA((k0 + "\\*").c_str(), &findFileData);
 
 		if (hFind == INVALID_HANDLE_VALUE) {
-			MessageBox(m->hwnd, "Error: No File Handle for Recursive Cycling", "Error", MB_OK);
+			MessageBox(m->hwnd, "Error: No File Handle for Recursive Cycling", "Error", MB_OK | MB_ICONERROR);
 		}
 
 		do {
@@ -225,7 +265,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	}
 
 	if (!m->imgdata) {
-		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK);
+		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK | MB_ICONERROR);
 		if (m->imgdata) {
 			free(m->imgdata);
 		}

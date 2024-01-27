@@ -27,10 +27,16 @@ bool IsNumeric(LPCTSTR str) {
     return true;
 }
 
+bool ts = false;
 LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+    if (m->imgwidth < 1) {
+
+        MessageBox(hwnd, "You need an image first", "Error", MB_OK | MB_ICONERROR);
+        return FALSE;
+    }
     if (!m) {
         MessageBox(hwnd, "Once upon a time there was a little pointer called m. it travels all across our code, until one day, it got lost. we can't find m, so we don't know what to do here, therefore throwing an error together!", "Fatal Memory Transfer Error", MB_OK | MB_ICONERROR);
-        return TRUE; // Do not proceed with resizing
+        return FALSE;
     }
     switch (msg) {
     case WM_INITDIALOG: {
@@ -51,20 +57,13 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         SetWindowText(hHeightEdit, strh);
 
         SetFocus(hWidthEdit);
+
         SendMessage(hWidthEdit, EM_SETSEL, 0, -1);
 
-        return TRUE;
+        return FALSE;
     }
     case WM_COMMAND: {
         switch (LOWORD(wparam)) {
-        case WM_CHAR: {
-            // Allow only numeric characters
-            if (wparam < '0' || wparam > '9') {
-                MessageBeep(MB_ICONERROR);
-                return 0; // Ignore non-numeric characters
-            }
-            break;
-        }
         case ConfirmBBox: {
             // Retrieve values from text boxes
             char widthText[16], heightText[16];
@@ -73,12 +72,19 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 
             if (!IsNumeric(widthText) || !IsNumeric(heightText)) {
                 MessageBox(hwnd, "Width and height must be numeric!", "Error", MB_OK | MB_ICONERROR);
+                SetFocus(hWidthEdit);
+                SendMessage(hWidthEdit, EM_SETSEL, 0, -1);
                 return TRUE; // Do not proceed with resizing
             }
 
             // Convert text to integers
             int width = atoi(widthText);
             int height = atoi(heightText);
+
+            if (width > 16000 || height > 16000) {
+                MessageBox(hwnd, "Too many pixels: Too high resolution", "Error", MB_OK | MB_ICONERROR);
+                return TRUE; // Do not proceed with resizing
+            }
 
             if (width < 0 || height < 0) {
                 MessageBox(hwnd, "You really though you could get away with having a negative width or height", "Error", MB_OK | MB_ICONERROR);
@@ -99,6 +105,9 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         }
         }
         break;
+    }
+    case WM_CLOSE: {
+        EndDialog(hwnd, IDCANCEL);
     }
     default:
         return FALSE;
