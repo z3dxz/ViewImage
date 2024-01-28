@@ -560,6 +560,7 @@ void drawCircle(int x, int y, int radius, uint32_t* imageBuffer, int imageWidth)
 
 
 void RedrawSurface(GlobalParams* m) {
+	
 	if (m->width < 20) { return; }
 	uint32_t color = 0x101010;
 
@@ -587,20 +588,22 @@ void RedrawSurface(GlobalParams* m) {
 		}
 	}
 	
+	
+	
 	// set the coordinates for the image
 	ResetCoordinates(m);
-
+	
 	POINT p;
 	GetCursorPos(&p);
 	ScreenToClient(m->hwnd, &p);
 
+	
 	if ((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) {
 		RenderToolbar(m);
 	}
 	if (m->isMenuState) {
 		DrawMenu(m);
 	}
-	
 
 	if (m->loading) {
 
@@ -622,19 +625,13 @@ void RedrawSurface(GlobalParams* m) {
 		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 	}
 
+	
 	// draw test circle
 	if (m->isAnnotationCircleShown) {
 		CircleGenerator(m->drawSize * m->mscaler, p.x, p.y, 12, 4, (uint32_t*)m->scrdata, 0x000000, 1.0f, m->width, m->height);
 		CircleGenerator(m->drawSize * m->mscaler-2, p.x, p.y, 5, 4, (uint32_t*)m->scrdata, 0xFFFFFF, 0.5f, m->width, m->height);
 		
 	}
-	/*
-	CircleGenerator(10, m->CoordLeft, m->CoordTop, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
-	CircleGenerator(10, m->CoordRight, m->CoordTop, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
-
-	CircleGenerator(10, m->CoordLeft, m->CoordBottom, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
-	CircleGenerator(10, m->CoordRight, m->CoordBottom, 8, 4, (uint32_t*)m->scrdata, 0xFF00FF, 1.0f, m->width, m->height);
-	*/
 	
 	//InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14); // why did I even put this here? it just causes a memory leak and does nothing
 
@@ -646,10 +643,12 @@ void RedrawSurface(GlobalParams* m) {
 			}
 		}
 	}
+	
 
 
 	// Update window title
-
+	
+	
 	char str[256];
 	if (!m->fpath.empty()) {
 
@@ -659,7 +658,6 @@ void RedrawSurface(GlobalParams* m) {
 
 		sprintf(str, "View Image");
 	}
-
 	SetWindowText(m->hwnd, str);
 
 	BITMAPINFO bmi;
@@ -670,7 +668,8 @@ void RedrawSurface(GlobalParams* m) {
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
 
+	SetDIBitsToDevice(m->hdc, 0, 0, m->width, m->height, 0, 0, 0, m->height, m->scrdata, &bmi, DIB_RGB_COLORS);
+	
 
 	// tell our lovely win32 api to update the window for us <3
-	SetDIBitsToDevice(m->hdc, 0, 0, m->width, m->height, 0, 0, 0, m->height, m->scrdata, &bmi, DIB_RGB_COLORS);
 }

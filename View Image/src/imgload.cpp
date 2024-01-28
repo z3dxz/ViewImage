@@ -318,6 +318,6 @@ void PrepareOpenImage(GlobalParams* m) {
 	if (res != "Invalid") {
 		//m->imgwidth = 0;
 		OpenImageFromPath(m, res, false);
+		m->shouldSaveShutdown = false;
 	}
-	m->shouldSaveShutdown = false;
 }

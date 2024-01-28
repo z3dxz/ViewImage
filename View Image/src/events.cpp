@@ -291,6 +291,8 @@ void MouseMove(GlobalParams* m) {
 			SelectClipRgn(m->hdc, rgn);
 			RedrawSurface(m);
 			SelectClipRgn(m->hdc, NULL);
+
+			DeleteObject(rgn);
 		}
 		else {
 			if (m->lock) {
@@ -331,6 +333,7 @@ void MouseMove(GlobalParams* m) {
 		SelectClipRgn(m->hdc, rgn);
 		RedrawSurface(m);
 		SelectClipRgn(m->hdc, NULL);
+		DeleteObject(rgn);
 		// second
 		{
 
@@ -345,6 +348,7 @@ void MouseMove(GlobalParams* m) {
 			SelectClipRgn(m->hdc, rgn);
 			RedrawSurface(m);
 			SelectClipRgn(m->hdc, NULL);
+			DeleteObject(rgn);
 		}
 	}
 
@@ -353,6 +357,8 @@ void MouseMove(GlobalParams* m) {
 		SelectClipRgn(m->hdc, rgn);
 		RedrawSurface(m);
 		SelectClipRgn(m->hdc, NULL);
+
+		DeleteObject(rgn);
 	}
 
 
@@ -395,7 +401,9 @@ void UndoBus(GlobalParams* m) {
 }
 
 void RedoBus(GlobalParams* m) {
-	if (m->undoStep < m->undoData.size() - 1) {
+	int s = m->undoStep;
+	int step = m->undoData.size() - 1;
+	if (s < step) {
 		m->undoStep++;
 		uint32_t* selection = m->undoData[m->undoStep];
 		memcpy(m->imgannotate, selection, m->imgwidth * m->imgheight * 4);
@@ -651,6 +659,10 @@ void Size(GlobalParams* m) {
 }
 
 void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
+	
+
+
+
 	if (m->imgwidth < 1) return;
 	float zDelta = (float)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA;
 
@@ -663,6 +675,12 @@ void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		v = 0.8f;
 	}
 
+	if ((GetKeyState(VK_MENU) & 0x8000)&&m->drawmode) {// why do they call the alt key VK_MENU
+		m->drawSize *= v;
+		MouseMove(m);
+	}
+	else {
+		NewZoom(m, v, true);
+	}
 
-	NewZoom(m, v, true);
 }

@@ -181,8 +181,6 @@ void ResizeImageToSize(GlobalParams* m, int width, int height) {
 	m->imgheight = height;
 	m->shouldSaveShutdown = true;
 
-	m->undoStep = 0;
-	m->undoData.clear();
 	free(m->imgannotate);
 	m->imgannotate = malloc(width * height * 4);
 	memset(m->imgannotate, 0x00, width * height * 4);
@@ -190,6 +188,9 @@ void ResizeImageToSize(GlobalParams* m, int width, int height) {
 	FreeCombineBuffer(m);
 	//free(to);
 
+	m->undoStep = 0;
+	m->undoData.clear();
+	
 }
 
 
