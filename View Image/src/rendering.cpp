@@ -291,6 +291,7 @@ void PlaceImageNN(GlobalParams* m, void* memory, bool invert) {
 				});
 		});
 }
+
 /*
 uint32_t bkc{};
 					// bkc
@@ -301,6 +302,7 @@ uint32_t bkc{};
 						bkc = 0x0C0C0C;
 					}
 */
+
 void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
 		[&](uint32_t y) {
@@ -318,6 +320,9 @@ void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 					float pty = (y - offY) * nscaler;
 
 					int margin = 2;
+					if (m->fullscreen) {
+						margin = 0;
+					}
 					if (ptx < m->imgwidth - 1 && pty < m->imgheight - 1 && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
 						// Calculate the integer and fractional parts of ptx and pty
 						int32_t ptx_int = static_cast<int32_t>(ptx);
@@ -346,7 +351,7 @@ void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 		});
 }
 
-void RenderToolbarButton(GlobalParams* m, void* data, int maxButtons, uint32_t color, float opacity, uint32_t selectedColor, float selectedOpacity) {
+void RenderToolbarButtons(GlobalParams* m, void* data, int maxButtons, uint32_t color, float opacity, uint32_t selectedColor, float selectedOpacity) {
 	int p = 5;
 	int k = 0;
 
@@ -381,7 +386,7 @@ void RenderToolbar(GlobalParams* m) {
 		//BLUR FOR TOOLBAR
 	
 		if (m->CoordTop <= m->toolheight) {
-			gaussian_blur_toolbar(m, (uint32_t*)m->scrdata);
+			//gaussian_blur_toolbar(m, (uint32_t*)m->scrdata);
 		}
 		else {
 
@@ -396,17 +401,18 @@ void RenderToolbar(GlobalParams* m) {
 		for (uint32_t y = 0; y < m->toolheight; y++) {
 			for (uint32_t x = 0; x < m->width; x++) {
 				uint32_t color = 0x050505;
-				if (y == m->toolheight - 2) color = 0x303030;
-				if (y == m->toolheight - 1) color = 0x000000;
+				float opacity = 0.65f;
+				if (y == m->toolheight - 2) { color = 0x303030; }
+				if (y == m->toolheight - 1) { color = 0x000000; opacity = 1.0f; }
 
 				if (y == 0) color = 0x303030;
 				if (y == 1) color = 0x000000;
 				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
-				*memoryPath = lerp(*memoryPath, color, 0.65f); // transparency
+				*memoryPath = lerp(*memoryPath, color, opacity); // transparency
 			}
 		}
-
-		// drop shadow
+		
+		// drop shadow for the toolbar (not buttons)
 		for (uint32_t y = 0; y < 20; y++) {
 			for (uint32_t x = 0; x < m->width; x++) {
 				uint32_t color = 0x000000;
@@ -415,7 +421,7 @@ void RenderToolbar(GlobalParams* m) {
 				*memoryPath = lerp(*memoryPath, color, (1.0f - ((float)y / 20.0f)) * 0.3f); // transparency
 			}
 		}
-		// BUTTONS
+		// BUTTONS actually
 
 
 		if (!m->toolbarData) return;
@@ -426,19 +432,31 @@ void RenderToolbar(GlobalParams* m) {
 		int mybutton = m->maxButtons;
 		if (m->imgwidth < 1) mybutton = 1;
 
-		RenderToolbarButton(m, m->toolbarData_shadow, mybutton, 0, 0.7f, 0, 0.7f);
-		RenderToolbarButton(m, m->toolbarData, mybutton, 0xFFFFFF, 0.7f, 0xFFE0E0, 1.0f);
+		RenderToolbarButtons(m, m->toolbarData_shadow, mybutton, 0, 0.7f, 0, 0.7f);
+		RenderToolbarButtons(m, m->toolbarData, mybutton, 0xFFFFFF, 0.7f, 0xFFE0E0, 1.0f);
 
 
-		// tooltips
+		// tooltips AND OUTLINE FOR THE BUTTONS (basically stuff when its selected)
+
+		//-- The border when selecting annotate
+		if (m->drawmode) {
+			dDrawRoundedRectangle(m->scrdata, m->width, m->height, (7 * GetButtonInterval(m) + 2), 4, GetButtonInterval(m), m->toolheight - 8, 0xFFFFFF, 0.2f);
+			dDrawRoundedRectangle(m->scrdata, m->width, m->height, (7 * GetButtonInterval(m) + 2) - 1, 3, GetButtonInterval(m) + 2, m->toolheight - 6, 0x000000, 1.0f);
+		}
+
 		if (m->selectedbutton >= 0 && m->selectedbutton < mybutton) {
 			// rounded corners: split hover thing into three things
 
-			dDrawFilledRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2) + 1, 4, GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
-			dDrawFilledRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2), 5, GetButtonInterval(m), m->toolheight - 10, 0xFF8080, 0.2f);
-			dDrawFilledRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2) + 1, (m->toolheight - 5), GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
+			//-- The fill when selecting the buttons
+				dDrawFilledRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2) + 1, 4, GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
+				dDrawFilledRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2), 5, GetButtonInterval(m), m->toolheight - 10, 0xFF8080, 0.2f);
+				dDrawFilledRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2) + 1, (m->toolheight - 5), GetButtonInterval(m) - 2, 1, 0xFF8080, 0.2f);
+	
+			//-- The outline wb border when selecting the buttons
+			dDrawRoundedRectangle(m->scrdata, m->width, m->height, (m->selectedbutton*GetButtonInterval(m)+2), 4, GetButtonInterval(m), m->toolheight - 8, 0xFFFFFF, 0.2f);
+			dDrawRoundedRectangle(m->scrdata, m->width, m->height, (m->selectedbutton * GetButtonInterval(m) + 2)-1, 3, GetButtonInterval(m)+2, m->toolheight - 6, 0x000000, 1.0f);
 
-
+			
 
 			std::string txt = "Error";
 			if (m->selectedbutton < m->maxButtons) {
@@ -451,11 +469,48 @@ void RenderToolbar(GlobalParams* m) {
 			PlaceNewFont(m, txt.c_str(), loc + 4, m->toolheight + 2, "C:\\Windows\\Fonts\\segoeui.TTF", 14, 0xFFFFFF);
 
 
-			// menu
-
+			
 		}
 
-		PlaceNewFont(m, "v2.2", m->width - 30, 20, "C:\\Windows\\Fonts\\tahoma.ttf", 10, 0x808080);
+		// fullscreen icon
+		POINT mp;
+		GetCursorPos(&mp);
+		ScreenToClient(m->hwnd, &mp);
+		bool nearf = false;
+		if ((mp.x > m->width - 36 && mp.x < m->width - 13) && (mp.y > 12 && mp.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
+			nearf = true;
+		}
+
+		if(nearf) {
+			//-- The outline for the fullscreen button
+			dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->width-36, 12, 24, 23, 0xFFFFFF, 0.2f);
+			dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->width-37, 11, 26, 25, 0x000000, 1.0f);
+
+			//-- Fullscreen icon tooltip
+			if (m->fullscreen) {
+				PlaceNewFont(m, "Exit Fullscreen", m->width - 90, 48, "C:\\Windows\\Fonts\\tahoma.ttf", 13, 0xFFFFFF);
+			}
+			else {
+				PlaceNewFont(m, "Fullscreen", m->width - 70, 48, "C:\\Windows\\Fonts\\tahoma.ttf", 13, 0xFFFFFF);
+			}
+		}
+
+		for (int y = 0; y < 11; y++) {
+			for (int x = 0; x < 12; x++) {
+				uint32_t* oLoc = GetMemoryLocation(m->scrdata, m->width + x - 30, y + 18, m->width, m->height);
+				float t = 0.5f;
+				if (nearf) {
+					t = 1.0f;
+				}
+				float transparency = ((float)((*GetMemoryLocation(m->fullscreenIconData, x, y, 12, 11))&0xFF) / 255.0f)*t;
+				*oLoc = lerp(*oLoc, 0xFFFFFF, transparency);
+			}
+		}
+
+		// version
+		PlaceNewFont(m, "v2.2", m->width - 65, 16, "C:\\Windows\\Fonts\\tahoma.ttf", 10, 0x808080);
+
+		
 		
 }
 
@@ -576,17 +631,20 @@ void RedrawSurface(GlobalParams* m) {
 	}
 
 	// render the image
-	if (!m->loading) {
+	//if (!m->loading) {
+	
+	
 		if (m->smoothing) {
 			PlaceImageBI(m, m->imgdata, true);
 		}
 		else {
 			PlaceImageNN(m, m->imgdata, true);
 		}
+	
 		if (m->shouldSaveShutdown) {
 			PlaceImageBI(m, m->imgannotate, false);
 		}
-	}
+	
 	
 	
 	
@@ -627,11 +685,14 @@ void RedrawSurface(GlobalParams* m) {
 
 	
 	// draw test circle
+	/*
+	
 	if (m->isAnnotationCircleShown) {
 		CircleGenerator(m->drawSize * m->mscaler, p.x, p.y, 12, 4, (uint32_t*)m->scrdata, 0x000000, 1.0f, m->width, m->height);
 		CircleGenerator(m->drawSize * m->mscaler-2, p.x, p.y, 5, 4, (uint32_t*)m->scrdata, 0xFFFFFF, 0.5f, m->width, m->height);
 		
 	}
+	*/
 	
 	//InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14); // why did I even put this here? it just causes a memory leak and does nothing
 

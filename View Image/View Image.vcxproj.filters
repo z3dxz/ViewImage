@@ -36,6 +36,9 @@
     <ClCompile Include="src\dialogcontrol.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\toolbar_engine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\stb_image.h">
@@ -74,6 +77,9 @@
     <ClInclude Include="src\headers\dialogcontrol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\headers\toolbar_engine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="View Image.rc">
@@ -94,6 +100,24 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="toolshadow.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="corner.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="edge.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="face.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="maincorner.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="fullscreen_icon.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="fullscreen_icon.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

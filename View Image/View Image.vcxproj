@@ -158,6 +158,7 @@
     <ClCompile Include="src\ops.cpp" />
     <ClCompile Include="src\rendering.cpp" />
     <ClCompile Include="src\starter.cpp" />
+    <ClCompile Include="src\toolbar_engine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
@@ -170,6 +171,7 @@
     <ClInclude Include="src\headers\globalvar.h" />
     <ClInclude Include="src\headers\imgload.h" />
     <ClInclude Include="src\headers\rendering.h" />
+    <ClInclude Include="src\headers\toolbar_engine.h" />
     <ClInclude Include="src\stb_image.h" />
     <ClInclude Include="src\stb_image_write.h" />
   </ItemGroup>
@@ -178,7 +180,13 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="checkerboard_pattern.png" />
+    <Image Include="corner.png" />
+    <Image Include="edge.png" />
+    <Image Include="face.png" />
+    <Image Include="fullscreen_icon.bmp" />
+    <Image Include="fullscreen_icon.png" />
     <Image Include="iconbar.png" />
+    <Image Include="maincorner.png" />
     <Image Include="sfbb_icon.ico" />
     <Image Include="toolshadow.png" />
     <Image Include="txt_atlas.png" />

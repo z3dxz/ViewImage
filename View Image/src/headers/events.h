@@ -16,3 +16,5 @@ void MouseUp(GlobalParams* m);
 void RightUp(GlobalParams* m);
 void Size(GlobalParams* m);
 void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam);
+
+void ToggleFullscreen(GlobalParams* m);

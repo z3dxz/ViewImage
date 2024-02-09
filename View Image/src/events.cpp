@@ -5,6 +5,8 @@
 
 void createUndoStep(GlobalParams* m);
 
+void ToggleFullscreen(GlobalParams* m);
+
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 
 
@@ -21,6 +23,13 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 
 	m->toolbarData_shadow = LoadImageFromResource(IDB_PNG2, m->widthos, m->heightos, m->channelos);
 	m->toolbarData = LoadImageFromResource(IDB_PNG1, m->widthos, m->heightos, m->channelos);
+	
+
+
+	int null1, null2, null3;
+	m->mainToolbarCorner = LoadImageFromResource(IDB_PNG3, null1, null2, null3);
+
+	m->fullscreenIconData = LoadImageFromResource(IDB_PNG4, null1, null2, null3);
 
 	// turn arguments into path
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, NULL, 0, NULL, NULL);
@@ -62,6 +71,16 @@ bool ToolbarMouseDown(GlobalParams* m) {
 			createUndoStep(m);
 		}
 	}
+	{
+		POINT mp;
+		GetCursorPos(&mp);
+		ScreenToClient(m->hwnd, &mp);
+		// fullscreen icon
+		if ((mp.x > m->width - 36 && mp.x < m->width - 13) && (mp.y > 12 && mp.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
+			ToggleFullscreen(m); // TODO: please make a seperate icon for the exiting fullscreen
+		}
+	}
+	
 
 	POINT mPP;
 	GetCursorPos(&mPP);
@@ -189,7 +208,12 @@ void MouseDown(GlobalParams* m) {
 }
 
 
-POINT* sampleLine(double x1, double y1, double x2, double y2, int numSamples) {
+POINT* sampleLine(GlobalParams* m, double x1, double y1, double x2, double y2, int* outSamples) {
+	float sizex = abs(x2 - x1);
+	float sizey = abs(y2 - y1);
+	float dist = (sqrt(pow(sizex, 2) + pow(sizey, 2)));
+	int numSamples = (dist/(m->drawSize/4))+2;
+
 	POINT* samples = (POINT*)malloc(sizeof(POINT) * numSamples);
 
 	for (int i = 0; i < numSamples; i++) {
@@ -198,6 +222,23 @@ POINT* sampleLine(double x1, double y1, double x2, double y2, int numSamples) {
 		samples[i].y = y1 + t * (y2 - y1);
 	}
 
+	// remember to deallocate
+	*outSamples = numSamples;
+	return samples;
+}
+
+POINT* sampleLine_old(double x1, double y1, double x2, double y2, int numSamples) {
+
+
+	POINT* samples = (POINT*)malloc(sizeof(POINT) * numSamples);
+
+	for (int i = 0; i < numSamples; i++) {
+		double t = (double)i / (numSamples - 1);
+		samples[i].x = x1 + t * (x2 - x1);
+		samples[i].y = y1 + t * (y2 - y1);
+	}
+
+	// remember to deallocate
 	return samples;
 }
 
@@ -205,6 +246,7 @@ uint32_t change_alpha(uint32_t color, uint8_t new_alpha) {
 	// Assuming color format is 0xRRGGBBAA
 	return (color & 0xFFFFFF) | (static_cast<uint32_t>(new_alpha) << 24);
 }
+
 
 void placeDraw(GlobalParams* m, POINT* pos) {
 
@@ -219,9 +261,10 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 
 	if (m->lastMouseX == -1) { k = k1; v = v1; }
 
-	int samples0 = m->a_hardness;
+	//int samples0 = m->a_hardness;
 
-	POINT* k2 = sampleLine(k1, v1, k, v, samples0);
+	int samples0;
+	POINT* k2 = sampleLine(m, k1, v1, k, v, &samples0);
 
 	for (int i = 0; i < samples0; i++) {
 
@@ -236,23 +279,21 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 
 					uint32_t xloc = (x - halfsize) + (k2[i].x);
 					uint32_t yloc = (y - halfsize) + (k2[i].y);
-					xloc += (rand() % m->a_frost) - m->a_frost/2;
-					yloc += (rand() % m->a_frost) - m->a_frost/2;
+					xloc += (rand() % m->a_frost) - m->a_frost / 2;
+					yloc += (rand() % m->a_frost) - m->a_frost / 2;
 					if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
 						// drawing
-						if (!m->imgannotate) {
-							MessageBox(m->hwnd, "Contact the developer for a solution", "Drawing Major Error", MB_OK | MB_ICONERROR);
-							exit(0);
-						}
 
 						uint32_t* memoryPath = GetMemoryLocation(m->imgannotate, xloc, yloc, m->imgwidth, m->imgheight);
-						*memoryPath = lerp(*memoryPath, change_alpha(m->a_drawColor, 255), (yes / pow(halfsize, 2)) * m->a_opacity); // transparency
+						*memoryPath = lerp(*memoryPath, change_alpha(m->a_drawColor, 255), (1.0f-(yes / pow(halfsize, 2))) * m->a_opacity); // transparency
 						m->shouldSaveShutdown = true;
 					}
 				}
 			}
 		}
 	}
+
+	free(k2);
 
 	m->lastMouseX = pos->x;
 	m->lastMouseY = pos->y;
@@ -261,10 +302,11 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 	RedrawSurface(m);
 }
 
+
 bool beforeas = false;
 
 void MouseMove(GlobalParams* m) {
-	
+	ShowCursor(1);
 	POINT pos = { 0 };
 	GetCursorPos(&pos);
 
@@ -304,6 +346,8 @@ void MouseMove(GlobalParams* m) {
 	}
 
 #pragma region Cusor
+	/*
+	
 	HCURSOR cursor = LoadCursor(NULL, IDC_ARROW);
 	bool isInMenu = ((pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY))) && m->isMenuState;
 	bool isInImage = pos.y > m->toolheight && pos.x >= m->CoordLeft && pos.y >= m->CoordTop && pos.x < m->CoordRight && pos.y < m->CoordBottom;
@@ -367,6 +411,7 @@ void MouseMove(GlobalParams* m) {
 	m->lastMoveX = pos.x;
 	m->lastMoveY = pos.y;
 	beforeas = as;
+	*/
 #pragma endregion
 
 	
@@ -411,6 +456,27 @@ void RedoBus(GlobalParams* m) {
 	classUndo = false;
 }
 
+void ToggleFullscreen(GlobalParams* m) {
+	if (m->fullscreen) {
+		// disable fullscreen
+		SetWindowLong(m->hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+		SetWindowPlacement(m->hwnd, &m->wpPrev);
+		SetWindowPos(m->hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+		m->fullscreen = false;
+		RedrawSurface(m);
+	}
+	else {
+		m->fullscreen = true;
+		int screenX = GetSystemMetrics(SM_CXSCREEN);
+		int screenY = GetSystemMetrics(SM_CYSCREEN);
+		GetWindowPlacement(m->hwnd, &m->wpPrev);
+		SetWindowLong(m->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+		SetWindowPos(m->hwnd, 0, 0, 0, screenX, screenY, 0);
+		RedrawSurface(m);
+	}
+}
+
 void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 
 	if (m->halt) { return; }
@@ -418,6 +484,9 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	HWND temp = GetActiveWindow();
 	if (temp != m->hwnd) {
 		return;
+	}
+	if (m->fullscreen) {
+		while (ShowCursor(FALSE) >= 0); // Hide idle cursor in fullscreen
 	}
 	if (wparam == 'Z' && GetKeyState(VK_CONTROL) & 0x8000) {
 		// undo
@@ -461,7 +530,8 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		m->drawmode = !m->drawmode;
 		RedrawSurface(m);
 	}
-	if (wparam == VK_F11) {
+
+	if (wparam == VK_ESCAPE) {
 		if (m->fullscreen) {
 			// disable fullscreen
 			SetWindowLong(m->hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
@@ -471,15 +541,9 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			m->fullscreen = false;
 			RedrawSurface(m);
 		}
-		else {
-			m->fullscreen = true;
-			int screenX = GetSystemMetrics(SM_CXSCREEN);
-			int screenY = GetSystemMetrics(SM_CYSCREEN);
-			GetWindowPlacement(m->hwnd, &m->wpPrev);
-			SetWindowLong(m->hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-			SetWindowPos(m->hwnd, 0, 0, 0, screenX, screenY, 0);
-			RedrawSurface(m);
-		}
+	}
+	if (wparam == VK_F11) {
+		ToggleFullscreen(m);
 	}
 	if (wparam == VK_LEFT) {
 		if (!m->loading && !m->halt && m->imgwidth>0) {

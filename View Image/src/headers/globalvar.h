@@ -15,8 +15,12 @@ struct GlobalParams {
 	void* scrdata;
 	void* toolbar_gaussian_data;
 	uint32_t* tempCombineBuffer;
+	// images
 	unsigned char* toolbarData;
 	unsigned char* toolbarData_shadow;
+	unsigned char* mainToolbarCorner;
+	unsigned char* fullscreenIconData;
+	
 	std::vector<uint32_t*> undoData;
 	void* tempResizeBuffer;
 	int undoStep = 0;
@@ -98,11 +102,10 @@ struct GlobalParams {
 	// drawing/annotating
 
 	bool drawmode = false;
-	uint32_t a_drawColor = 0x20202CC;
+	uint32_t a_drawColor = 0xCC0202;
 	float drawSize = 20;
-	int a_hardness = 90;
-	int a_frost = 5;
-	float a_opacity = 0.04f;
+	int a_frost = 1;
+	float a_opacity = 1.0f;
 
 	bool isAnnotationCircleShown = false;
 

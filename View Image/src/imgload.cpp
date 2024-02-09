@@ -194,6 +194,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	
 	m->loading = true;
 	RedrawSurface(m);
+	//Sleep(430);
 
 	if (!doIFSave(m)) {
 		return false;
@@ -213,55 +214,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 		
 	}
 	else {
-
-		std::string k0 = m->cd + "\\custom_formats\\";
-
-
-		WIN32_FIND_DATAA findFileData;
-		HANDLE hFind = FindFirstFileA((k0 + "\\*").c_str(), &findFileData);
-
-		if (hFind == INVALID_HANDLE_VALUE) {
-			MessageBox(m->hwnd, "Error: No File Handle for Recursive Cycling", "Error", MB_OK | MB_ICONERROR);
-		}
-
-		do {
-			if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0) {
-
-					if (isFile(kpath.c_str(), findFileData.cFileName)) {
-						std::string applicationPath = k0 + findFileData.cFileName + "\\target.exe";
-
-						DeleteFile("D:\\_f_.png");
-
-						SHELLEXECUTEINFO shExInfo = { 0 };
-						shExInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-						shExInfo.fMask = SEE_MASK_NOCLOSEPROCESS; // This flag is crucial
-						shExInfo.lpVerb = "open";
-						shExInfo.lpFile = applicationPath.c_str();
-						shExInfo.lpParameters = ("\""+kpath+"\"").c_str();
-						shExInfo.nShow = SW_NORMAL;
-						if (ShellExecuteEx(&shExInfo)) {
-							int k = m->width;
-							WaitForSingleObject(shExInfo.hProcess, INFINITE);
-							//Sleep(1);
-							m->imgdata = GetStandardBitmap(m, "D:\\_f_.png", &m->imgwidth, &m->imgheight);
-							// Close the process handle
-							CloseHandle(shExInfo.hProcess);
-							DeleteFile("D:\\_f_.png");
-						}
-						else {
-							exit(0);
-							return 0;
-						}
-						//HINSTANCE hInstance = ShellExecuteEx(&shExInfo);//(NULL, "open", applicationPath.c_str(), kpath.c_str(), NULL, SW_SHOWNORMAL);
-							
-					}
-				}
-			}
-		} while (FindNextFileA(hFind, &findFileData) != 0);
-
-		FindClose(hFind);
-		
+		// no
 	}
 
 	if (!m->imgdata) {
