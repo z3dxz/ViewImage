@@ -141,9 +141,9 @@ void Print(GlobalParams* m) {
 	// Get the printer device context
 	HDC printerDC = pd.hDC;
 
-	CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
-	PrintImageToPrinter((uint32_t*)m->tempCombineBuffer, m->imgwidth, m->imgheight, printerDC);
-	FreeCombineBuffer(m);
+	//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+	PrintImageToPrinter((uint32_t*)m->imgdata, m->imgwidth, m->imgheight, printerDC);
+	//FreeCombineBuffer(m);
 }
 
 void swapPointers(void*& ptr1, void*& ptr2) {
@@ -172,61 +172,88 @@ void ResizeImageToSize(GlobalParams* m, int width, int height) {
 }
 */
 
-void ResizeImageToSize(GlobalParams* m, int width, int height) {
-	CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+void ResizeImageToSize(GlobalParams* m, int nwidth, int nheight) {
+
+
+	createUndoStep(m);
+	// allocate the copy for temporary reference
+	void* tempOldBuffer = malloc(m->imgwidth * m->imgheight * 4);
+	memcpy(tempOldBuffer, m->imgdata, m->imgwidth * m->imgheight * 4);
+
+	int owidth = m->imgwidth;
+	int oheight = m->imgheight;
+
+
+	//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+	// 
+	// reallocate my image data boolean to suit the new data
+
 	free(m->imgdata);
-	m->imgdata = malloc(width * height * 4);
-	stbir_resize_uint8((unsigned char*)m->tempCombineBuffer, m->imgwidth, m->imgheight, 0, (unsigned char*)m->imgdata, width, height, 0, 4);
-	m->imgwidth = width;
-	m->imgheight = height;
+	m->imgdata = malloc(nwidth * nheight * 4);
+	m->imgwidth = nwidth;
+	m->imgheight = nheight;
+
+	// do
+	stbir_resize_uint8((unsigned char*)tempOldBuffer, owidth, oheight, 0, (unsigned char*)m->imgdata, nwidth, nheight, 0, 4);
+
 	m->shouldSaveShutdown = true;
 
-	free(m->imgannotate);
-	m->imgannotate = malloc(width * height * 4);
-	memset(m->imgannotate, 0x00, width * height * 4);
+	//m->undoStep = 0;
+	//m->undoData.clear();
+	//free(m->imgannotate);
+	//m->imgannotate = malloc(width * height * 4);
+	//memset(m->imgannotate, 0x00, width * height * 4);
 	autozoom(m);
-	FreeCombineBuffer(m);
-	//free(to);
+	//FreeCombineBuffer(m);
+	free(tempOldBuffer);
+	RedrawSurface(m);
 
-	m->undoStep = 0;
-	m->undoData.clear();
-	
+
+
+
 }
 
 
 void rotateImage90Degrees(GlobalParams* m) {
+	createUndoStep(m);
+	// allocate the copy for tempoary reference
+	void* tempOldBuffer = malloc(m->imgwidth * m->imgheight * 4);
+	memcpy(tempOldBuffer, m->imgdata, m->imgwidth * m->imgheight * 4);
+	
+	int owidth = m->imgwidth;
+	int oheight = m->imgheight;
 
-	//
+	int nwidth = m->imgheight;
+	int nheight = m->imgwidth; // reverse it
+
+	//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
 	// 
-	// 
+	// reallocate my image data boolean to suit the new data
 
-	int width = m->imgheight;
-	int height = m->imgwidth; // reverse it
-
-	CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
 	free(m->imgdata);
-	m->imgdata = malloc(width * height * 4);
+	m->imgdata = malloc(nwidth * nheight * 4);
+	m->imgwidth = nwidth;
+	m->imgheight = nheight;
 
 	// do
-	for (size_t y = 0; y < height; y++) {
-		for (size_t x = 0; x < width; x++) {
-			*GetMemoryLocation(m->imgdata, x, y, width, height) = *GetMemoryLocation(m->tempCombineBuffer, y, width - 1 - x, m->imgwidth, m->imgheight);
+	for (size_t y = 0; y < nheight; y++) {
+		for (size_t x = 0; x < nwidth; x++) {
+			*GetMemoryLocation(m->imgdata, x, y, nwidth, nheight) = *GetMemoryLocation(tempOldBuffer, y, nwidth - 1 - x, owidth, oheight);
 		}
 	}
-
-	m->imgwidth = width;
-	m->imgheight = height;
+	
 	m->shouldSaveShutdown = true;
-
-	m->undoStep = 0;
-	m->undoData.clear();
-	free(m->imgannotate);
-	m->imgannotate = malloc(width * height * 4);
-	memset(m->imgannotate, 0x00, width * height * 4);
+	
+	//m->undoStep = 0;
+	//m->undoData.clear();
+	//free(m->imgannotate);
+	//m->imgannotate = malloc(width * height * 4);
+	//memset(m->imgannotate, 0x00, width * height * 4);
 	autozoom(m);
-	FreeCombineBuffer(m);
+	//FreeCombineBuffer(m);
+	free(tempOldBuffer);
 	RedrawSurface(m);
-
+	
 }
 /*
 
@@ -351,31 +378,13 @@ uint32_t InvertColorChannels(uint32_t d, bool should) {
 	}
 }
 
-static const float gammaLUTL[256] = { 0, 0.00129465, 0.00594864, 0.014515, 0.0273328, 0.0446566, 0.0666936, 0.0936197, 0.125588, 0.162737, 0.205188, 0.253055, 0.306444, 0.365449, 0.430163, 0.500671, 0.577053, 0.659386, 0.747741, 0.842189, 0.942796, 1.04963, 1.16274, 1.28219, 1.40804, 1.54035, 1.67916, 1.82453, 1.97651, 2.13514, 2.30048, 2.47256, 2.65144, 2.83715, 3.02974, 3.22925, 3.43572, 3.64918, 3.86969, 4.09726, 4.33195, 4.57379, 4.82281, 5.07905, 5.34254, 5.61331, 5.89141, 6.17685, 6.46968, 6.76991, 7.0776, 7.39275, 7.71541, 8.0456, 8.38336, 8.7287, 9.08166, 9.44227, 9.81055, 10.1865, 10.5702, 10.9617, 11.3609, 11.768, 12.1828, 12.6055, 13.0361, 13.4746, 13.921, 14.3754, 14.8377, 15.3081, 15.7864, 16.2728, 16.7672, 17.2698, 17.7804, 18.2992, 18.8261, 19.3612, 19.9044, 20.4559, 21.0156, 21.5836, 22.1598, 22.7443, 23.3372, 23.9383, 24.5479, 25.1657, 25.792, 26.4267, 27.0698, 27.7213, 28.3814, 29.0498, 29.7268, 30.4123, 31.1064, 31.8089, 32.5201, 33.2398, 33.9682, 34.7051, 35.4507, 36.205, 36.9679, 37.7395, 38.5198, 39.3088, 40.1066, 40.9131, 41.7284, 42.5524, 43.3853, 44.227, 45.0775, 45.9368, 46.805, 47.6821, 48.568, 49.4629, 50.3667, 51.2794, 52.2011, 53.1317, 54.0713, 55.0199, 55.9775, 56.9442, 57.9198, 58.9045, 59.8983, 60.9011, 61.9131, 62.9341, 63.9643, 65.0035, 66.052, 67.1096, 68.1763, 69.2523, 70.3374, 71.4317, 72.5353, 73.6481, 74.7701, 75.9014, 77.042, 78.1919, 79.351, 80.5195, 81.6973, 82.8844, 84.0809, 85.2867, 86.502, 87.7265, 88.9605, 90.2039, 91.4568, 92.719, 93.9907, 95.2718, 96.5624, 97.8625, 99.1721, 100.491, 101.82, 103.158, 104.506, 105.863, 107.23, 108.606, 109.992, 111.387, 112.792, 114.207, 115.631, 117.065, 118.509, 119.962, 121.425, 122.898, 124.38, 125.872, 127.374, 128.885, 130.406, 131.937, 133.478, 135.028, 136.589, 138.159, 139.738, 141.328, 142.927, 144.536, 146.156, 147.784, 149.423, 151.072, 152.73, 154.398, 156.077, 157.765, 159.463, 161.171, 162.889, 164.617, 166.354, 168.102, 169.86, 171.628, 173.405, 175.193, 176.991, 178.798, 180.616, 182.444, 184.281, 186.129, 187.987, 189.855, 191.733, 193.621, 195.52, 197.428, 199.346, 201.275, 203.214, 205.163, 207.122, 209.091, 211.07, 213.06, 215.059, 217.069, 219.089, 221.12, 223.16, 225.211, 227.272, 229.343, 231.425, 233.516, 235.618, 237.731, 239.853, 241.986, 244.129, 246.283, 248.447, 250.621, 252.805, 255 };
-static const float gammaLUTS[256] = { 0, 21.0667, 28.778, 34.5384, 39.3119, 43.4644, 47.1808, 50.5698, 53.7016, 56.6247, 59.3741, 61.976, 64.4509, 66.8146, 69.0804, 71.2587, 73.3586, 75.3875, 77.3517, 79.2567, 81.1074, 82.9079, 84.6618, 86.3723, 88.0425, 89.6747, 91.2715, 92.8348, 94.3666, 95.8686, 97.3423, 98.7893, 100.211, 101.608, 102.982, 104.334, 105.666, 106.976, 108.268, 109.541, 110.796, 112.034, 113.256, 114.461, 115.651, 116.827, 117.988, 119.135, 120.27, 121.391, 122.499, 123.596, 124.681, 125.754, 126.816, 127.868, 128.909, 129.939, 130.96, 131.972, 132.974, 133.966, 134.95, 135.925, 136.892, 137.85, 138.801, 139.743, 140.678, 141.605, 142.525, 143.438, 144.343, 145.242, 146.134, 147.019, 147.898, 148.771, 149.637, 150.498, 151.352, 152.2, 153.043, 153.88, 154.712, 155.538, 156.358, 157.174, 157.984, 158.79, 159.59, 160.386, 161.176, 161.962, 162.744, 163.521, 164.293, 165.061, 165.825, 166.584, 167.339, 168.09, 168.837, 169.58, 170.319, 171.054, 171.785, 172.512, 173.236, 173.956, 174.672, 175.385, 176.094, 176.8, 177.502, 178.201, 178.897, 179.589, 180.279, 180.964, 181.647, 182.327, 183.003, 183.677, 184.347, 185.015, 185.679, 186.341, 187, 187.656, 188.309, 188.96, 189.607, 190.252, 190.895, 191.535, 192.172, 192.806, 193.438, 194.068, 194.695, 195.32, 195.942, 196.561, 197.179, 197.794, 198.407, 199.017, 199.625, 200.231, 200.834, 201.436, 202.035, 202.632, 203.227, 203.82, 204.41, 204.999, 205.586, 206.17, 206.753, 207.333, 207.912, 208.488, 209.063, 209.636, 210.206, 210.775, 211.342, 211.907, 212.471, 213.032, 213.592, 214.15, 214.706, 215.26, 215.813, 216.364, 216.913, 217.461, 218.007, 218.551, 219.093, 219.634, 220.174, 220.711, 221.247, 221.782, 222.315, 222.846, 223.376, 223.904, 224.431, 224.956, 225.48, 226.002, 226.523, 227.042, 227.56, 228.077, 228.592, 229.105, 229.618, 230.128, 230.638, 231.146, 231.653, 232.158, 232.662, 233.165, 233.666, 234.166, 234.665, 235.162, 235.659, 236.154, 236.647, 237.14, 237.631, 238.121, 238.609, 239.097, 239.583, 240.068, 240.552, 241.035, 241.516, 241.996, 242.475, 242.953, 243.43, 243.906, 244.381, 244.854, 245.326, 245.798, 246.268, 246.737, 247.205, 247.672, 248.137, 248.602, 249.066, 249.528, 249.99, 250.45, 250.91, 251.368, 251.826, 252.282, 252.738, 253.192, 253.646, 254.098, 254.55, 255 };
 
-uint32_t lerpz(uint32_t color1, uint32_t color2, float alpha)
-{
-	// Extract the individual color channels from the input values
-	float a1 = gammaLUTL[(color1 >> 24) & 0xFF];
-	float r1 = gammaLUTL[(color1 >> 16) & 0xFF];
-	float g1 = gammaLUTL[(color1 >> 8) & 0xFF];
-	float b1 = gammaLUTL[color1 & 0xFF];
-
-	float a2 = gammaLUTL[(color2 >> 24) & 0xFF];
-	float r2 = gammaLUTL[(color2 >> 16) & 0xFF];
-	float g2 = gammaLUTL[(color2 >> 8) & 0xFF];
-	float b2 = gammaLUTL[color2 & 0xFF];
-
-	// Calculate the lerped color values for each channel
-	uint8_t a = gammaLUTS[(uint8_t)((1.0f - alpha) * a1 + alpha * a2)];
-	uint8_t r = gammaLUTS[(uint8_t)((1.0f - alpha) * r1 + alpha * r2)];
-	uint8_t g = gammaLUTS[(uint8_t)((1.0f - alpha) * g1 + alpha * g2)];
-	uint8_t b = gammaLUTS[(uint8_t)((1.0f - alpha) * b1 + alpha * b2)];
-
-	// Combine the lerped color channels into a single 32-bit value
-	return (a << 24) | (r << 16) | (g << 8) | b;
+double gammaCorrect(double value, double gamma) {
+    return std::pow(value, 1.0 / gamma);
 }
+
+
+
 
 uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 {
@@ -399,6 +408,59 @@ uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 	// Combine the lerped color channels into a single 32-bit value
 	return (a << 24) | (r << 16) | (g << 8) | b;
 }
+
+
+
+
+const int TABLE_SIZE = 256;
+
+uint8_t  gamma_table[TABLE_SIZE];
+uint8_t  inv_gamma_table[TABLE_SIZE];
+
+void init_gamma_tables(float gamma) {
+	for (int i = 0; i < TABLE_SIZE; ++i) {
+		gamma_table[i] = (uint8_t)(std::pow(i / 255.0f, gamma)*255.0f);
+		inv_gamma_table[i] = (uint8_t)(std::pow(i / 255.0f, 1.0f/gamma)*255.0f);
+	}
+}
+
+bool yes = 0;
+uint32_t lerp_gammacorrect(uint32_t color1, uint32_t color2, float alpha) {
+	if (!yes) {
+		init_gamma_tables(2.2);
+		yes = 1;
+	}
+
+	// Extract the individual color channels from the input values and apply gamma correction using the lookup table
+	uint8_t a1 = gamma_table[(color1 >> 24) & 0xFF];
+	uint8_t r1 = gamma_table[(color1 >> 16) & 0xFF];
+	uint8_t g1 = gamma_table[(color1 >> 8) & 0xFF];
+	uint8_t b1 = gamma_table[color1 & 0xFF];
+
+	uint8_t a2 = gamma_table[(color2 >> 24) & 0xFF];
+	uint8_t r2 = gamma_table[(color2 >> 16) & 0xFF];
+	uint8_t g2 = gamma_table[(color2 >> 8) & 0xFF];
+	uint8_t b2 = gamma_table[color2 & 0xFF];
+
+	// Calculate the lerped color values for each channel
+	uint8_t a = (1 - alpha) * a1 + alpha * a2;
+	uint8_t r = (1 - alpha) * r1 + alpha * r2;
+	uint8_t g = (1 - alpha) * g1 + alpha * g2;
+	uint8_t b = (1 - alpha) * b1 + alpha * b2;
+
+	// Undo gamma correction
+
+	
+	a = inv_gamma_table[a];
+	r = inv_gamma_table[r];
+	g = inv_gamma_table[g];
+	b = inv_gamma_table[b];
+	
+
+	// Combine the lerped color channels into a single 32-bit value
+	return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
 
 // Gaussian function
 double gaussian(double x, double sigma) {
@@ -512,7 +574,21 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 
 
 
+uint32_t multiplyColor(uint32_t color, float multiplier) {
+	// Extracting the individual color components
+	uint8_t alpha = (color >> 24) & 0xFF;
+	uint8_t red = (color >> 16) & 0xFF;
+	uint8_t green = (color >> 8) & 0xFF;
+	uint8_t blue = color & 0xFF;
 
+	// Multiplying each color component by the multiplier
+	red = static_cast<uint8_t>(red * multiplier);
+	green = static_cast<uint8_t>(green * multiplier);
+	blue = static_cast<uint8_t>(blue * multiplier);
+
+	// Combining the color components back into a single color value
+	return (alpha << 24) | (red << 16) | (green << 8) | blue;
+}
 
 // Gaussian blur function
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
@@ -536,7 +612,7 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 		kernel[i] /= sum;
 	}
 
-	// Allocate temporary row array
+	// Allocate tempoary row array
 	uint32_t* row = (uint32_t*)malloc(width * sizeof(uint32_t));
 
 	// Blur horizontally
@@ -615,9 +691,9 @@ void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels) {
 	unsigned char* gd = (unsigned char*)m->toolbar_gaussian_data;
 
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
-	fast_gaussian_blur(px, gd, m->width, m->toolheight, 4, 4.0f, 10, Border::kKernelCrop);
+	//fast_gaussian_blur(px, gd, m->width, m->toolheight, 4, 4.0f, 10, Border::kKernelCrop);
 	//gaussian_blur(pixels, m->width, 40, 4.0, m->width, 40, 0, 0);
-	//boxBlur(pixels, m->width, 40, 15);
+	boxBlur(pixels, m->width, 40, 15);
 
 	//convolution((uint32_t*)m->scrdata, (uint32_t*)m->toolbar_gaussian_data, m->width, 40, kernel, 9);
 

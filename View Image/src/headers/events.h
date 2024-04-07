@@ -7,6 +7,7 @@
 #include <string>
 #include "dialogcontrol.h"
 
+
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv);
 bool ToolbarMouseDown(GlobalParams* m);
 void MouseDown(GlobalParams* m);
@@ -18,3 +19,6 @@ void Size(GlobalParams* m);
 void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam);
 
 void ToggleFullscreen(GlobalParams* m);
+
+
+void createUndoStep(GlobalParams* m);

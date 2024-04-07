@@ -11,12 +11,15 @@
 #include <cstdint>
 #include "headers/ops.h"
 #include <dwmapi.h>
+#include <uxtheme.h>
 #include "headers/globalvar.h"
 #include "headers/imgload.h"
 #include "headers/events.h"
 
 #pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "winmm.lib")
 // draw vars
 
 GlobalParams gp;
@@ -46,6 +49,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 	wc.lpszClassName = CLASS_NAME;
 	wc.lpfnWndProc = WndProc;
+	//wc.hbrBackground = (HBRUSH)(COLOR_WINDOW);
 	//wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.style = CS_HREDRAW | CS_VREDRAW;
 
@@ -78,28 +82,39 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 
 	bool running = true;
+	static DWORD previousTime;
 	while (running) {
+
+		DWORD currentTime = timeGetTime();
+		DWORD deltaTime = currentTime - previousTime;
+		previousTime = timeGetTime();
 
 		HWND temp = GetActiveWindow();
 		if (temp == gp.hwnd) {
 
-			if (GetKeyState('W') & 0x8000) {
-				gp.iLocY += 3;
-				RedrawSurface(&gp);
+			bool isW = GetKeyState('W') & 0x8000;
+			bool isA = GetKeyState('A') & 0x8000;
+			bool isS = GetKeyState('S') & 0x8000;
+			bool isD = GetKeyState('D') & 0x8000;
+
+
+			if (isW) {
+				gp.iLocY += deltaTime;
 			}
-			if (GetKeyState('A') & 0x8000) {
-				gp.iLocX += 3;
-				RedrawSurface(&gp);
+			if (isA) {
+				gp.iLocX += deltaTime;
 			}
-			if (GetKeyState('S') & 0x8000) {
-				gp.iLocY -= 3;
-				RedrawSurface(&gp);
+			if (isS) {
+				gp.iLocY -= deltaTime;
 			}
-			if (GetKeyState('D') & 0x8000) {
-				gp.iLocX -= 3;
+			if (isD) {
+				gp.iLocX -= deltaTime;
+			}
+			if (isW || isA || isS || isD) {
 				RedrawSurface(&gp);
 			}
 		}
+
 
 		MSG msg = { 0 };
 		while (PeekMessage(&msg, NULL, NULL, NULL, PM_REMOVE)) {
@@ -107,6 +122,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+
 	}
 
 	return 0;
@@ -127,12 +143,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_GETMINMAXINFO:
 	{
-		
+
 		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lparam;
 		lpMMI->ptMinTrackSize.x = 340;
 		lpMMI->ptMinTrackSize.y = 40 + 70;
-		
-		
+
+
 		break;
 	}
 	case WM_LBUTTONDOWN:
@@ -152,12 +168,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_RBUTTONUP: {
 
-			RightUp(&gp);
+		RightUp(&gp);
 
 		break;
 	}
-	case WM_MOUSEMOVE:
-	case WM_NCMOUSEMOVE: {
+	case WM_MOUSEMOVE: {
 		MouseMove(&gp);
 		break;
 	}
@@ -200,9 +215,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		SetDIBitsToDevice(gp.hdc, 0, 0, gp.width, gp.height, 0, 0, 0, gp.height, gp.scrdata, &bmi, DIB_RGB_COLORS);
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
+	case WM_KILLFOCUS: {
+		for (int i = 0; i < 50; i++) {
+			ShowCursor(500);
+		}
+		break;
+	}
 	default: {
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
+
+
+
 	}
 
 

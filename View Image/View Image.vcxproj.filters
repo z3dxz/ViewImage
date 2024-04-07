@@ -120,6 +120,9 @@
     <Image Include="fullscreen_icon.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="iconbar_b.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="cursor5.cur">

@@ -4,6 +4,8 @@
 #include <thread>
 #include <wincodec.h>
 
+#pragma comment(lib,"freetype.lib")
+
 // Freetype Globals
 FT_Library ft;
 FT_Face face;
@@ -47,21 +49,27 @@ void CircleGenerator(int circleDiameter, int locX, int locY, int outlineThicknes
 		}
 	}
 }
-
-bool InitFont(HWND hwnd, const char* font, int size) {
-
+bool isalreadyopened = false;
+bool InitFont(GlobalParams* m, const char* font, int size) {
+	
 	if (FT_Init_FreeType(&ft)) {
-		MessageBox(hwnd, "Failed to initialize FreeType library\n", "Error", MB_OK | MB_ICONERROR);
+		MessageBox(m->hwnd, "Failed to initialize FreeType library\n", "Error", MB_OK | MB_ICONERROR);
+		m->fontinit = false;
 		return false;
 	}
 
 	if (FT_New_Face(ft, font, 0, &face)) {
-		MessageBox(hwnd, "Failed to load font\n", "Error", MB_OK | MB_ICONERROR);
+		if (!isalreadyopened) {
+			MessageBox(m->hwnd, "Failed to load a font. This dialog will not appear again.", "Error", MB_OK | MB_ICONERROR);
+			isalreadyopened = true;
+		}
+		m->fontinit = false;
 		return false;
 	}
 
 	FT_Set_Pixel_Sizes(face, 0, size);
-
+	m->fontinit = true;
+	return true;
 }
 
 const char* strtable[] {
@@ -79,7 +87,9 @@ const char* strtable[] {
 };
 
 int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
-
+	if (!m->fontinit) {
+		return 0;
+	}
 	if (m->width < 100) return 0;
 	const char* text = inputstr;
 
@@ -123,7 +133,7 @@ int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t l
 	}
 
 	
-	
+	return 1;
 }
 
 int PlaceString_old_legacy(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
@@ -176,9 +186,11 @@ int PlaceString_old_legacy(GlobalParams* m, const char* inputstr, uint32_t locX,
 
 
 void PlaceNewFont(GlobalParams* m, std::string text, int x, int y, std::string font, int size, uint32_t color) {
-	FT_Done_Face(face);
-	FT_Done_FreeType(ft);
-	InitFont(m->hwnd, font.c_str(), size);
+	if (m->fontinit) {
+		FT_Done_Face(face);
+		FT_Done_FreeType(ft);
+	}
+	InitFont(m, font.c_str(), size);
 	PlaceString(m, text.c_str(), x, y, color, m->scrdata);
 
 }
@@ -303,6 +315,11 @@ uint32_t bkc{};
 					}
 */
 
+bool followsPattern(int number) {
+	double logBase2 = log2(number / 100.0);
+	return logBase2 == floor(logBase2);
+}
+
 void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // MULTITHREADING!!
 		[&](uint32_t y) {
@@ -316,8 +333,13 @@ void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 					offX += m->iLocX;
 					offY += m->iLocY;
 
-					float ptx = (x - offX) * nscaler;
-					float pty = (y - offY) * nscaler;
+					float ptx = (x - offX) * nscaler - 0.5f; // fix for shifting
+					float pty = (y - offY) * nscaler - 0.5f;
+
+					if (followsPattern(m->mscaler * 100)) { // automatically snap to pixels when a reasonable scale
+						ptx = (x - offX) * nscaler;
+						pty = (y - offY) * nscaler;
+					}
 
 					int margin = 2;
 					if (m->fullscreen) {
@@ -351,7 +373,34 @@ void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 		});
 }
 
-void RenderToolbarButtons(GlobalParams* m, void* data, int maxButtons, uint32_t color, float opacity, uint32_t selectedColor, float selectedOpacity) {
+void RenderMainToolbarButtons(GlobalParams* m, void* data, int maxButtons, uint32_t color, float opacity, uint32_t selectedColor, float selectedOpacity) {
+	int p = 5;
+	int k = 0;
+
+	for (int i = 0; i < maxButtons; i++) {
+		if ((p) > (m->width - (m->iconSize))) continue;
+		for (uint32_t y = 0; y < m->iconSize; y++) {
+			for (uint32_t x = 0; x < m->iconSize; x++) {
+
+
+				uint32_t l = (*GetMemoryLocation(data, x + k, y, m->widthos, m->heightos));
+				float alphaM = (float)((l >> 24) & 0xFF)/255.0f;
+				float valueM = (float)((l >> 16) & 0xFF)/255.0f;
+				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, p + x, 6 + y, m->width, m->height);
+
+				if (i != m->selectedbutton) {
+					*memoryPath = lerp(*memoryPath, multiplyColor(color, valueM), alphaM * opacity); // transparency
+				}
+				else {
+					*memoryPath = lerp(*memoryPath, multiplyColor(selectedColor, valueM), alphaM * selectedOpacity); // transparency
+				}
+			}
+		}
+		p += m->iconSize + 5; k += m->iconSize + 1;
+	}
+}
+
+void RenderToolbarButtonShadow(GlobalParams* m, void* data, int maxButtons, uint32_t color, float opacity, uint32_t selectedColor, float selectedOpacity) {
 	int p = 5;
 	int k = 0;
 
@@ -386,7 +435,7 @@ void RenderToolbar(GlobalParams* m) {
 		//BLUR FOR TOOLBAR
 	
 		if (m->CoordTop <= m->toolheight) {
-			//gaussian_blur_toolbar(m, (uint32_t*)m->scrdata);
+			gaussian_blur_toolbar(m, (uint32_t*)m->scrdata);
 		}
 		else {
 
@@ -432,8 +481,9 @@ void RenderToolbar(GlobalParams* m) {
 		int mybutton = m->maxButtons;
 		if (m->imgwidth < 1) mybutton = 1;
 
-		RenderToolbarButtons(m, m->toolbarData_shadow, mybutton, 0, 0.7f, 0, 0.7f);
-		RenderToolbarButtons(m, m->toolbarData, mybutton, 0xFFFFFF, 0.7f, 0xFFE0E0, 1.0f);
+		RenderToolbarButtonShadow(m, m->toolbarData_shadow, mybutton, 0x606060, 0.7f, 0, 0.7f);
+		RenderToolbarButtonShadow(m, m->toolbarData_shadow, mybutton, 0x000000, 0.7f, 0, 0.7f);
+		RenderMainToolbarButtons(m, m->toolbarData, mybutton, 0xFFFFFF, 0.7f, 0xFFE0E0, 1.0f);
 
 
 		// tooltips AND OUTLINE FOR THE BUTTONS (basically stuff when its selected)
@@ -508,7 +558,7 @@ void RenderToolbar(GlobalParams* m) {
 		}
 
 		// version
-		PlaceNewFont(m, "v2.2", m->width - 65, 16, "C:\\Windows\\Fonts\\tahoma.ttf", 10, 0x808080);
+		PlaceNewFont(m, "v2.3", m->width - 70, 16, "C:\\Windows\\Fonts\\OCRAEXT.TTF", 13, 0x808080);
 
 		
 		
@@ -518,11 +568,11 @@ void ResetCoordinates(GlobalParams* m) {
 
 	if (m->imgwidth > 1) {
 
-		m->CoordLeft = (m->width / 2) - (-m->iLocX) - (int)(((float)(m->imgwidth / 2)) * m->mscaler);
-		m->CoordTop = (m->height / 2) - (-m->iLocY) - (int)(((float)(m->imgheight / 2)) * m->mscaler);
+		m->CoordLeft = (m->width / 2) - (-m->iLocX) - (int)((((float)m->imgwidth / 2.0f)) * m->mscaler);
+		m->CoordTop = (m->height / 2) - (-m->iLocY) - (int)((((float)m->imgheight / 2.0f)) * m->mscaler);
 
-		m->CoordRight = (m->width / 2) - (-m->iLocX) + (int)(((float)(m->imgwidth / 2)) * m->mscaler);
-		m->CoordBottom = (m->height / 2) - (-m->iLocY) + (int)(((float)(m->imgheight / 2)) * m->mscaler);
+		m->CoordRight = (m->width / 2) - (-m->iLocX) + (int)((((float)m->imgwidth / 2.0f)) * m->mscaler);
+		m->CoordBottom = (m->height / 2) - (-m->iLocY) + (int)((((float)m->imgheight / 2.0f)) * m->mscaler);
 
 	}
 }
@@ -613,6 +663,107 @@ void drawCircle(int x, int y, int radius, uint32_t* imageBuffer, int imageWidth)
 	}
 }
 
+void RenderSlider(GlobalParams* m, int offsetX, int offsetY, int sizex, float position, float highlightOpacity) {
+	// draw slider
+	
+	dDrawRoundedRectangle(m->scrdata, m->width, m->height, offsetX+ 1, offsetY +1, sizex, 5, 0xFFFFFF, highlightOpacity); // actual slider
+	dDrawRoundedRectangle(m->scrdata, m->width, m->height, offsetX+ 0, offsetY, sizex+2, 7, 0x000000, 0.9f); // outline slider
+	int pos = ((sizex) * position) + offsetX-2;
+	dDrawRoundedRectangle(m->scrdata, m->width, m->height, pos+1, offsetY -4, 4, 15, 0xFFFFFF, highlightOpacity); // actual  "knob"
+	dDrawRoundedRectangle(m->scrdata, m->width, m->height, pos, offsetY-5, 6, 17, 0x000000, 0.9f); // outline "knob"
+}
+
+
+void DrawDrawModeMenu(GlobalParams* m){
+	//if (m->width < 620) { return; }
+
+	m->drawMenuOffsetX = 393;
+	m->drawMenuOffsetY = 0;
+
+	int sizeCx = m->width-m->drawMenuOffsetX -80; // offset
+	if (sizeCx < 410) {
+		m->drawMenuOffsetX = 0;
+		m->drawMenuOffsetY = m->height - 40;
+		sizeCx = m->width;
+
+		boxBlur(GetMemoryLocation(m->scrdata, 0, m->height - 40, m->width, m->height), m->width, 40, 4.0f);
+	}
+
+	
+
+	// draw outline
+	dDrawRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX, m->drawMenuOffsetY, sizeCx, 42, 0xFFFFFF, 0.3f);
+	// draw main
+	dDrawFilledRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX, m->drawMenuOffsetY, sizeCx, 42, 0x000000, 0.5f);
+
+	// draw seperator
+	dDrawFilledRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX+75, m->drawMenuOffsetY + 15, 1, 17, 0xFFFFFF, 0.3f);
+	dDrawFilledRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX + 261, m->drawMenuOffsetY + 15, 1, 17, 0xFFFFFF, 0.3f);
+
+	// draw text
+	PlaceNewFont(m, "Color:", m->drawMenuOffsetX +11, m->drawMenuOffsetY + 10, "C:\\Windows\\Fonts\\segoeui.TTF", 14, 0xFFFFFF);
+	PlaceString(m, "Size:", m->drawMenuOffsetX +81, m->drawMenuOffsetY + 10, 0xFFFFFF, m->scrdata);
+	PlaceString(m, "Opacity:", m->drawMenuOffsetX +270, m->drawMenuOffsetY + 10, 0xFFFFFF, m->scrdata);
+
+	char str[256];
+	sprintf(str, "%.1fpx", m->drawSize);
+	PlaceString(m, str, m->drawMenuOffsetX + 217, m->drawMenuOffsetY + 10, 0xFFFFFF, m->scrdata);
+
+	char str2[256];
+	sprintf(str2, "%.2fpx", m->a_opacity);
+	PlaceString(m, str2, m->drawMenuOffsetX + 410, m->drawMenuOffsetY + 10, 0xFFFFFF, m->scrdata);
+
+
+	// draw color square
+	dDrawFilledRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX + 51, m->drawMenuOffsetY + 14, 18, 18, InvertColorChannels(m->a_drawColor, 1), 1.0f); // actual color
+	dDrawRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX + 51, m->drawMenuOffsetY + 14, 18, 18, 0xFFFFFF, 0.3f); // outline (white)
+	dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX +50, m->drawMenuOffsetY + 13, 20, 20, 0x000000, 0.9f); // outline (black)
+	
+
+	float sizeLeveler = sqrt(m->drawSize-1) / 10.0f; // I used ALGEBRA!
+	if (sizeLeveler > 1.0f) { sizeLeveler = 1.0f; }
+	if (sizeLeveler < 0.0f) { sizeLeveler = 0.0f; }
+
+	float opacitylever = m->a_opacity;
+
+	POINT mp;
+	GetCursorPos(&mp);
+	ScreenToClient(m->hwnd, &mp);
+
+	// Hover
+	//------------------------------------------------------------------------------------------------------------------------------
+	int slider1begin = m->drawMenuOffsetX + m->slider1begin;
+	int slider1end = m->drawMenuOffsetX + m->slider1end;
+
+	int slider2begin = m->drawMenuOffsetX + m->slider2begin;
+	int slider2end = m->drawMenuOffsetX + m->slider2end;
+
+	int sliderYb = m->drawMenuOffsetY;
+	int sliderYe = m->drawMenuOffsetY + 40;
+
+	float highlightOpacity1 = 0.3f;
+	float highlightOpacity2 = 0.3f;
+
+	if ((mp.x > slider1begin && mp.x < slider1end) && (mp.y > sliderYb && mp.y < sliderYe) || m->slider1mousedown) {
+		highlightOpacity1 = 0.45f;
+	}
+
+	if ((mp.x > slider2begin && mp.x < slider2end) && (mp.y > sliderYb && mp.y < sliderYe) || m->slider2mousedown) {
+		highlightOpacity2 = 0.45f;
+	}
+	//------------------------------------------------------------------------------------------------------------------------------
+
+
+	RenderSlider(m, m->drawMenuOffsetX +m->slider1begin, m->drawMenuOffsetY + 19, m->slider1end-m->slider1begin, sizeLeveler, highlightOpacity1);
+	RenderSlider(m, m->drawMenuOffsetX +m->slider2begin, m->drawMenuOffsetY + 19, m->slider2end-m->slider2begin, opacitylever, highlightOpacity2);
+
+	FT_Done_Face(face);
+	FT_Done_FreeType(ft);
+	InitFont(m, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
+
+
+}
+
 
 void RedrawSurface(GlobalParams* m) {
 	
@@ -642,7 +793,7 @@ void RedrawSurface(GlobalParams* m) {
 		}
 	
 		if (m->shouldSaveShutdown) {
-			PlaceImageBI(m, m->imgannotate, false);
+			//PlaceImageBI(m, m->img, false);
 		}
 	
 	
@@ -655,10 +806,19 @@ void RedrawSurface(GlobalParams* m) {
 	GetCursorPos(&p);
 	ScreenToClient(m->hwnd, &p);
 
+	// debug circles
+	//drawCircle(m->CoordLeft, m->CoordTop, 16, (uint32_t*)m->scrdata, m->width);
+	//drawCircle(m->CoordRight, m->CoordTop, 16, (uint32_t*)m->scrdata, m->width);
+
 	
 	if ((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) {
 		RenderToolbar(m);
 	}
+
+	if ((!m->fullscreen || p.y < m->toolheight)&&m->drawmode) {
+		DrawDrawModeMenu(m);
+	}
+
 	if (m->isMenuState) {
 		DrawMenu(m);
 	}
@@ -670,7 +830,7 @@ void RedrawSurface(GlobalParams* m) {
 
 		FT_Done_Face(face);
 		FT_Done_FreeType(ft);
-		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
+		InitFont(m, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 	}
 
 	if (m->drawmode) {
@@ -680,7 +840,7 @@ void RedrawSurface(GlobalParams* m) {
 
 		FT_Done_Face(face);
 		FT_Done_FreeType(ft);
-		InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
+		InitFont(m, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 	}
 
 	
@@ -712,7 +872,6 @@ void RedrawSurface(GlobalParams* m) {
 	
 	char str[256];
 	if (!m->fpath.empty()) {
-
 		sprintf(str, "View Image | %s | %d\%%", m->fpath.c_str(), (int)(m->mscaler * 100.0f));
 	}
 	else {
@@ -729,8 +888,8 @@ void RedrawSurface(GlobalParams* m) {
 	bmi.bmiHeader.biBitCount = 32;
 	bmi.bmiHeader.biCompression = BI_RGB;
 
+	// tell our lovely win32 api to update the window for us <3
 	SetDIBitsToDevice(m->hdc, 0, 0, m->width, m->height, 0, 0, 0, m->height, m->scrdata, &bmi, DIB_RGB_COLORS);
 	
 
-	// tell our lovely win32 api to update the window for us <3
 }

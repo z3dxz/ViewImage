@@ -11,5 +11,5 @@
 
 #pragma comment(lib, "freetype.lib")
 
-bool InitFont(HWND hwnd, const char* font, int size);
+bool InitFont(GlobalParams* m, const char* font, int size);
 void RedrawSurface(GlobalParams* m);

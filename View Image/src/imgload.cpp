@@ -67,11 +67,12 @@ std::string FileSaveDialog(HWND hwnd) {
 	}
 	return "Invalid";
 }
+/*
 
 void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width, int height, bool invert) {
 
 	m->tempCombineBuffer = (uint32_t*)malloc(width * height * 4);
-	
+
 	for (int i = 0; i < width * height; ++i) {
 		// Extract RGBA values for each pixel from the first image
 		uint8_t alphaFirst = (first[i] >> 24) & 0xFF;
@@ -107,10 +108,10 @@ void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width
 
 		// Combine the RGBA values and store in the result buffer
 		m->tempCombineBuffer[i] = ((uint8_t)blendedAlpha << 24) | (blendedRed << 16) | (blendedGreen << 8) | blendedBlue;
-		
+
 	}
-		/*
-		* 
+		///*
+		*
 
 		for (int i = 0; i < width * height; i++) {
 			uint8_t alpha = (second[i] >> 24) & 0xFF;
@@ -137,15 +138,17 @@ void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width
 
 			*(m->tempCombineBuffer+i) = (resultRed << 16) | (resultGreen << 8) | resultBlue | backgroundA; // Full alpha
 		}
-		*/
-	
+		// put end thing here
+
 }
+
 
 void FreeCombineBuffer(GlobalParams* m) {
 	if (m->tempCombineBuffer) {
 		free(m->tempCombineBuffer);
 	}
 }
+*/
 
 void PrepareSaveImage(GlobalParams* m) {
 	std::string res = FileSaveDialog(m->hwnd);
@@ -153,9 +156,9 @@ void PrepareSaveImage(GlobalParams* m) {
 
 		m->loading = true;
 		RedrawSurface(m);
-		CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
-		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->tempCombineBuffer, 0);
-		FreeCombineBuffer(m);
+		//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
+		//FreeCombineBuffer(m);
 		m->loading = false;
 		m->shouldSaveShutdown = false;
 		RedrawSurface(m);
@@ -182,6 +185,64 @@ bool doIFSave(GlobalParams* m) {
 	return true;
 }
 
+bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
+	m->undoData.clear();
+	m->undoStep = 0;
+	m->drawmode = false;
+	m->drawmousedown = false;
+
+	clear_kvector();
+
+	m->loading = true;
+	RedrawSurface(m);
+	//Sleep(430);
+
+	if (!doIFSave(m)) {
+		m->loading = false;
+		return false;
+	}
+
+	m->fpath = "Untitled";
+
+	if (m->imgdata) {
+		free(m->imgdata);
+	}
+	//if (m->imgannotate) {
+	//	free(m->imgannotate);
+	//}
+	// put thing here
+
+	m->imgwidth = 1;
+	m->imgheight = 1;
+	m->imgdata = malloc(4);
+	*((uint32_t*)m->imgdata) = color;
+	
+
+	if (!m->imgdata) {
+		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK | MB_ICONERROR);
+		if (m->imgdata) {
+			free(m->imgdata);
+		}
+		m->imgwidth = 0;
+		m->imgheight = 0;
+
+	}
+
+	//m->imgannotate = malloc(m->imgwidth * m->imgheight * 4);
+
+	//memset(m->imgannotate, 0x00, m->imgwidth * m->imgheight * 4);
+
+	// Auto-zoom
+	autozoom(m);
+	m->smoothing = ((m->imgwidth * m->imgheight) > 625);
+	m->shouldSaveShutdown = false;
+
+	m->loading = false;
+
+	RedrawSurface(m);
+	return true;
+}
+
 bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	m->undoData.clear();
 	m->undoStep = 0;
@@ -197,6 +258,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	//Sleep(430);
 
 	if (!doIFSave(m)) {
+		m->loading = false;
 		return false;
 	}
 	
@@ -205,9 +267,10 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	if (m->imgdata) {
 		free(m->imgdata);
 	}
-	if (m->imgannotate) {
-		free(m->imgannotate);
-	}
+	//if (m->imgannotate) {
+	//	free(m->imgannotate);
+	//}
+	// put thing here
 
 	if (CheckIfStandardFile(kpath.c_str())) {
 		m->imgdata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
@@ -227,9 +290,9 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 
 	}
 
-	m->imgannotate = malloc(m->imgwidth * m->imgheight * 4);
+	//m->imgannotate = malloc(m->imgwidth * m->imgheight * 4);
 
-	memset(m->imgannotate, 0x00, m->imgwidth * m->imgheight * 4);
+	//memset(m->imgannotate, 0x00, m->imgwidth * m->imgheight * 4);
 
 	// Auto-zoom
 	autozoom(m);
@@ -267,7 +330,13 @@ std::string FileOpenDialog(HWND hwnd) {
 }
 
 void PrepareOpenImage(GlobalParams* m) {
-	std::string res = FileOpenDialog(m->hwnd);
+	std::string res = "Invalid";
+
+	
+	res = FileOpenDialog(m->hwnd);
+	
+
+
 	if (res != "Invalid") {
 		//m->imgwidth = 0;
 		OpenImageFromPath(m, res, false);

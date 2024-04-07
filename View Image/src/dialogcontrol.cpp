@@ -1,10 +1,13 @@
 #include "headers/dialogcontrol.h"
 #include "../resource.h"
+#include <Uxtheme.h>
+#include <dwmapi.h>
 
 GlobalParams* m;
 
 // resize dialog
 HWND hWidthEdit, hHeightEdit;
+HWND Confirm, No;
 
 // Function prototypes
 LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
@@ -28,6 +31,10 @@ bool IsNumeric(LPCTSTR str) {
 }
 
 bool ts = false;
+HBRUSH b;
+HBRUSH be;
+HBRUSH bz;
+HBRUSH bu;
 LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     if (m->imgwidth < 1) {
 
@@ -39,10 +46,60 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         return FALSE;
     }
     switch (msg) {
+    case WM_CTLCOLORDLG: {
+
+        if (bz) DeleteObject(bz);
+        bz = CreateSolidBrush(RGB(15,15,15));
+        return (LRESULT)bz;
+    }
+
+    case WM_CTLCOLORBTN: {
+        if (bu) DeleteObject(bu);
+        bu = CreateSolidBrush(RGB(0,0,0));
+        return (LRESULT)bu;
+    }
+    case WM_CTLCOLORSTATIC: {
+
+        DWORD CtrlID = GetDlgCtrlID((HWND)lparam);
+        HDC hdcStatic = (HDC)wparam;
+
+        if (b) DeleteObject(b);
+        b = CreateSolidBrush(RGB(15,15,15));
+
+        SetBkMode(hdcStatic, TRANSPARENT);
+
+        // Set default text color
+        SetTextColor(hdcStatic, RGB(200,200,200));
+
+
+        return (LRESULT)b;
+    }
+
+    case WM_CTLCOLOREDIT: {
+        DWORD CtrlID = GetDlgCtrlID((HWND)lparam);
+        HDC hdcStatic = (HDC)wparam;
+
+        if (be) DeleteObject(be);
+        b = CreateSolidBrush(RGB(40,40,40));
+
+        SetBkMode(hdcStatic, TRANSPARENT);
+        SetTextColor(hdcStatic, RGB(128,128,128));
+        SetBkColor(hdcStatic, RGB(0, 255, 255));
+
+
+       return (LRESULT)b;
+    }
     case WM_INITDIALOG: {
+
         // Initialize dialog controls and set default values
         hWidthEdit = GetDlgItem(hwnd, WidthPBox);
         hHeightEdit = GetDlgItem(hwnd, HeightPBox);
+        Confirm = GetDlgItem(hwnd, ConfirmBBox);
+        No = GetDlgItem(hwnd, CancelBBox);
+        
+        
+        SetWindowTheme(Confirm, L"Darkmode_Explorer", NULL);
+        SetWindowTheme(No, L"Darkmode_Explorer", NULL);
 
         int w1 = m->imgwidth;
         int h1 = m->imgheight;
@@ -59,6 +116,10 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         SetFocus(hWidthEdit);
 
         SendMessage(hWidthEdit, EM_SETSEL, 0, -1);
+
+        BOOL enable = TRUE;
+        DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
+
 
         return FALSE;
     }

@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include "rendering.h"
 #include <VersionHelpers.h>
+#include "events.h"
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
@@ -65,3 +66,5 @@ void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels);
 #pragma endregion
 
 void gaussianBlurFFT(uint32_t* image, int height, int width, int kernelSize, double* kernel);
+
+uint32_t multiplyColor(uint32_t color, float multiplier);

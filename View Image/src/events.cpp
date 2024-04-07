@@ -17,12 +17,17 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	m->cd = std::string(buffer);
 
 	//InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
-	m->scrdata = malloc(m->width * m->height * 4);
+	size_t scrsize = m->width * m->height * 4;
+	m->scrdata = malloc(scrsize);
+	for (uint32_t i = 0; i < m->width * m->height; i++) {
+		*((uint32_t*)m->scrdata+i) = 0x008080;
+
+	}
 
 	m->toolbar_gaussian_data = malloc(m->width * m->toolheight * 4);
 
 	m->toolbarData_shadow = LoadImageFromResource(IDB_PNG2, m->widthos, m->heightos, m->channelos);
-	m->toolbarData = LoadImageFromResource(IDB_PNG1, m->widthos, m->heightos, m->channelos);
+	m->toolbarData = LoadImageFromResource(IDB_PNG5, m->widthos, m->heightos, m->channelos);
 	
 
 
@@ -35,7 +40,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, NULL, 0, NULL, NULL);
 
 
-	InitFont(m->hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
+	InitFont(m, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
 
 	char* path = (char*)malloc(size_needed);
 	WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, path, size_needed, NULL, NULL);
@@ -57,6 +62,26 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	return true;
 }
 
+uint32_t PickColorFromDialog(GlobalParams* m, uint32_t def, bool* success) {
+	CHOOSECOLOR cc;
+	COLORREF acrCustClr[16];
+	ZeroMemory(&cc, sizeof(cc));
+	cc.lStructSize = sizeof(cc);
+	cc.hwndOwner = m->hwnd; // If you have a window handle, you can set it here
+	cc.lpCustColors = (LPDWORD)acrCustClr;
+	cc.rgbResult = def; // Default color
+	cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+
+	if (ChooseColor(&cc) == TRUE) {
+		return (uint32_t)cc.rgbResult; // Convert COLORREF to uint32_t
+	}
+	else {
+		// Handle error or cancellation
+		*success = false;
+		return 0; // Assuming 0 as an invalid color value
+	}
+}
+
 bool ToolbarMouseDown(GlobalParams* m) {
 	if (m->isMenuState) {
 		return 1;
@@ -66,11 +91,13 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		POINT mPP;
 		GetCursorPos(&mPP);
 		ScreenToClient(m->hwnd, &mPP);
-		if(mPP.y > m->toolheight && mPP.x>= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom){
+		if (mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom) {
 			m->drawmousedown = true;
 			createUndoStep(m);
 		}
 	}
+
+	// add toolbar clicky here
 	{
 		POINT mp;
 		GetCursorPos(&mp);
@@ -78,9 +105,54 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		// fullscreen icon
 		if ((mp.x > m->width - 36 && mp.x < m->width - 13) && (mp.y > 12 && mp.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
 			ToggleFullscreen(m); // TODO: please make a seperate icon for the exiting fullscreen
+
+			return 0;
 		}
 	}
-	
+
+	if(m->drawmode)
+	{
+		POINT mp;
+		GetCursorPos(&mp);
+		ScreenToClient(m->hwnd, &mp);
+		// this is for the drawing toolbar ONLY
+
+		int colorBeginX = m->drawMenuOffsetX + 51;
+		int colorEndX = m->drawMenuOffsetX + 69;
+		int colorBeginY = m->drawMenuOffsetY + 14;
+		int colorEndY = m->drawMenuOffsetY + 32;
+
+		int slider1begin = m->drawMenuOffsetX + m->slider1begin;
+		int slider1end = m->drawMenuOffsetX + m->slider1end;
+
+		int slider2begin = m->drawMenuOffsetX + m->slider2begin;
+		int slider2end = m->drawMenuOffsetX + m->slider2end;
+
+		int sliderYb = m->drawMenuOffsetY;
+		int sliderYe = m->drawMenuOffsetY+40;
+
+
+
+		if ((mp.x > colorBeginX && mp.x < colorEndX) && (mp.y > colorBeginY && mp.y < colorEndY)) { //color icon coordinates
+			// open color picker
+			bool success = true;
+			uint32_t c = PickColorFromDialog(m, m->a_drawColor, &success);
+			if (success) {
+				m->a_drawColor = c;
+			}
+			return 0;
+		}
+
+		//  I copied these to the rendering function so that I can make a hover effect
+		if ((mp.x > slider1begin && mp.x < slider1end) && (mp.y > sliderYb && mp.y < sliderYe)) {
+			m->slider1mousedown = true;
+		}
+
+		if ((mp.x > slider2begin && mp.x < slider2end) && (mp.y > sliderYb && mp.y < sliderYe)) {
+			m->slider2mousedown = true;
+		}
+
+	}
 
 	POINT mPP;
 	GetCursorPos(&mPP);
@@ -136,21 +208,27 @@ bool ToolbarMouseDown(GlobalParams* m) {
 	}
 	case 8: {
 
+		if (m->fpath != "Untitled") {
 
+			// delete
+			int result = MessageBox(m->hwnd, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
+			if (result == IDYES) {
+				DeleteFile(m->fpath.c_str());
+				CHAR szPath[MAX_PATH];
+				GetModuleFileName(NULL, szPath, MAX_PATH);
 
-		// delete
-		int result = MessageBox(m->hwnd, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
-		if (result == IDYES) {
-			DeleteFile(m->fpath.c_str());
-			CHAR szPath[MAX_PATH];
-			GetModuleFileName(NULL, szPath, MAX_PATH);
+				// Start a new instance of the application
+				ShellExecute(NULL, "open", szPath, NULL, NULL, SW_SHOWNORMAL);
 
-			// Start a new instance of the application
-			ShellExecute(NULL, "open", szPath, NULL, NULL, SW_SHOWNORMAL);
-
-			// Terminate the current instance of the application
-			ExitProcess(0);
+				// Terminate the current instance of the application
+				ExitProcess(0);
+			}
 		}
+		else {
+			MessageBox(m->hwnd, "The image that is loaded is temporary and can not be deleted", "Untitled", MB_OK);
+		}
+
+
 		return 0;
 	}
 	case 9: {
@@ -268,27 +346,28 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 
 	for (int i = 0; i < samples0; i++) {
 
-		// drawing
-		int size = m->drawSize;
-		int halfsize = size / 2;
+		// drawing here!
+		int diameter = m->drawSize;
+		float radius = (float)diameter / 2.0f;
 
-		for (int y = 0; y < size; y++) {
-			for (int x = 0; x < size; x++) {
-				double yes = pow(x - halfsize, 2) + pow(y - halfsize, 2);
-				if (yes <= pow(halfsize, 2)) {
+		for (int y = 0; y < diameter; y++) {
+			for (int x = 0; x < diameter; x++) {
+				float virtual_x = (float)x + 0.5f;
+				float virtual_y = (float)y + 0.5f;
+				double distance = sqrt(pow(virtual_x - radius, 2) + pow(virtual_y - radius, 2)); // pythagorean theorem AKA circle formula
+				if (distance > radius) { distance = radius; }
 
-					uint32_t xloc = (x - halfsize) + (k2[i].x);
-					uint32_t yloc = (y - halfsize) + (k2[i].y);
-					xloc += (rand() % m->a_frost) - m->a_frost / 2;
-					yloc += (rand() % m->a_frost) - m->a_frost / 2;
-					if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
-						// drawing
-
-						uint32_t* memoryPath = GetMemoryLocation(m->imgannotate, xloc, yloc, m->imgwidth, m->imgheight);
-						*memoryPath = lerp(*memoryPath, change_alpha(m->a_drawColor, 255), (1.0f-(yes / pow(halfsize, 2))) * m->a_opacity); // transparency
-						m->shouldSaveShutdown = true;
-					}
+				uint32_t xloc = (virtual_x - (radius)) + (k2[i].x);
+				uint32_t yloc = (virtual_y - (radius)) + (k2[i].y);
+				//xloc += (rand() % m->a_frost) - m->a_frost / 2;
+				//yloc += (rand() % m->a_frost) - m->a_frost / 2;
+				if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
+					// drawing
+					uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth, m->imgheight);
+					*memoryPath = lerp(*memoryPath, change_alpha(m->a_drawColor, 255), (1.0f-(distance / radius)) * m->a_opacity); // transparency
+					m->shouldSaveShutdown = true;
 				}
+				
 			}
 		}
 	}
@@ -310,7 +389,37 @@ void MouseMove(GlobalParams* m) {
 	POINT pos = { 0 };
 	GetCursorPos(&pos);
 
-	if (m->drawmousedown) {
+	if (m->slider1mousedown) {
+		ScreenToClient(m->hwnd, &pos);
+		float findMid = (float)(pos.x - (m->drawMenuOffsetX + m->slider1begin)) / (float)(m->slider1end-m->slider1begin);
+		m->testfloat = findMid;
+		if (findMid > 0.0f) {
+			m->drawSize = pow((findMid*10.0f),2)+1;
+			if (m->drawSize < 1.0f) { m->drawSize = 1.0f; }
+		}
+		else {
+			m->drawSize = 1.0f;
+		}
+		RedrawSurface(m);
+
+	}
+	else if (m->slider2mousedown) {
+		ScreenToClient(m->hwnd, &pos);
+		float findMid = (float)(pos.x - (m->drawMenuOffsetX + m->slider2begin)) / (float)(m->slider2end - m->slider2begin);
+		m->testfloat = findMid;
+		if (findMid >= 0.0f && findMid <= 1.0f) {
+			m->a_opacity = findMid;
+			//if (m->a_opacity < 0.01f) { m->a_opacity = 0.01f; }
+		}
+		else if (findMid < 0) {
+			m->a_opacity = 0;
+		}
+		else {
+			m->a_opacity = 1.0f;
+		}
+		RedrawSurface(m);
+	}
+	else if (m->drawmousedown) {
 		placeDraw(m, &pos);
 			return;
 	}
@@ -345,8 +454,6 @@ void MouseMove(GlobalParams* m) {
 		}
 	}
 
-#pragma region Cusor
-	/*
 	
 	HCURSOR cursor = LoadCursor(NULL, IDC_ARROW);
 	bool isInMenu = ((pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY))) && m->isMenuState;
@@ -362,6 +469,8 @@ void MouseMove(GlobalParams* m) {
 		RedrawSurface(m);
 	}
 
+	/*
+#pragma region Cusor
 	if (m->drawmode && as) {
 		int redrawmargins = 20;
 
@@ -396,6 +505,8 @@ void MouseMove(GlobalParams* m) {
 		}
 	}
 
+#pragma endregion
+	*/
 	if (m->isMenuState) {
 		HRGN rgn = CreateRectRgn(m->menuX, m->menuY, m->menuX + m->menuSX, m->menuY + m->menuSY);
 		SelectClipRgn(m->hdc, rgn);
@@ -411,8 +522,6 @@ void MouseMove(GlobalParams* m) {
 	m->lastMoveX = pos.x;
 	m->lastMoveY = pos.y;
 	beforeas = as;
-	*/
-#pragma endregion
 
 	
 }
@@ -424,14 +533,18 @@ void createUndoStep(GlobalParams* m) {
         MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK | MB_ICONERROR);
         exit(0);
     }
-    memcpy(thisImage, (uint32_t*)m->imgannotate, m->imgwidth * m->imgheight * 4);
+    memcpy(thisImage, (uint32_t*)m->imgdata, m->imgwidth * m->imgheight * 4);
 	for (int y = m->undoData.size(); y > m->undoStep; y--) {
-		uint32_t* last = m->undoData.back();
+		uint32_t* last = m->undoData.back().image;
 		free(last);
 		m->undoData.pop_back();
 	}
 	m->undoStep++;
-    m->undoData.push_back(thisImage);
+	UndoDataStruct k;
+	k.image = thisImage;
+	k.height = m->imgheight;
+	k.width = m->imgwidth;
+    m->undoData.push_back(k);
 	classUndo = true;
 }
 
@@ -439,8 +552,12 @@ void UndoBus(GlobalParams* m) {
 	if (classUndo) { createUndoStep(m); m->undoStep--; }
     if (m->undoStep > 0) {
         m->undoStep--;
-        uint32_t* selection = m->undoData[m->undoStep];
-        memcpy(m->imgannotate, selection, m->imgwidth * m->imgheight * 4);
+        UndoDataStruct selection = m->undoData[m->undoStep];
+		free(m->imgdata);
+		m->imgdata = malloc(selection.width * selection.height * 4);
+		m->imgwidth = selection.width;
+		m->imgheight = selection.height;
+        memcpy(m->imgdata, selection.image, selection.width * selection.height * 4);
     }
 	classUndo = false;
 }
@@ -450,8 +567,12 @@ void RedoBus(GlobalParams* m) {
 	int step = m->undoData.size() - 1;
 	if (s < step) {
 		m->undoStep++;
-		uint32_t* selection = m->undoData[m->undoStep];
-		memcpy(m->imgannotate, selection, m->imgwidth * m->imgheight * 4);
+		UndoDataStruct selection = m->undoData[m->undoStep];
+		free(m->imgdata);
+		m->imgdata = malloc(selection.width * selection.height * 4);
+		m->imgwidth = selection.width;
+		m->imgheight = selection.height;
+		memcpy(m->imgdata, selection.image, selection.width * selection.height * 4);
 	}
 	classUndo = false;
 }
@@ -488,6 +609,31 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	if (m->fullscreen) {
 		while (ShowCursor(FALSE) >= 0); // Hide idle cursor in fullscreen
 	}
+
+	if (wparam == 'F') {
+		PrepareOpenImage(m);
+		RedrawSurface(m);
+	}
+
+	if (wparam == VK_F11) {
+		ToggleFullscreen(m);
+	}
+	if (wparam == VK_ESCAPE) {
+		if (m->fullscreen) {
+			// disable fullscreen
+			SetWindowLong(m->hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+
+			SetWindowPlacement(m->hwnd, &m->wpPrev);
+			SetWindowPos(m->hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+			m->fullscreen = false;
+			RedrawSurface(m);
+		}
+	}
+
+	if (m->imgwidth < 1) {
+		return;
+	}
+
 	if (wparam == 'Z' && GetKeyState(VK_CONTROL) & 0x8000) {
 		// undo
 		UndoBus(m);
@@ -526,25 +672,12 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	}
 	*/
 	
+	
 	if (wparam == 'G') {
 		m->drawmode = !m->drawmode;
 		RedrawSurface(m);
 	}
 
-	if (wparam == VK_ESCAPE) {
-		if (m->fullscreen) {
-			// disable fullscreen
-			SetWindowLong(m->hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
-
-			SetWindowPlacement(m->hwnd, &m->wpPrev);
-			SetWindowPos(m->hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-			m->fullscreen = false;
-			RedrawSurface(m);
-		}
-	}
-	if (wparam == VK_F11) {
-		ToggleFullscreen(m);
-	}
 	if (wparam == VK_LEFT) {
 		if (!m->loading && !m->halt && m->imgwidth>0) {
 			m->halt = true;
@@ -577,11 +710,6 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 			m->loading = false;
 			m->halt = false;
 		}
-		RedrawSurface(m);
-	}
-
-	if (wparam == 'F') {
-		PrepareOpenImage(m);
 		RedrawSurface(m);
 	}
 
@@ -631,6 +759,11 @@ void MouseUp(GlobalParams* m) {
 	m->toolmouseDown = false;
 	m->drawmousedown = false;
 
+	m->slider1mousedown = false;
+	m->slider2mousedown = false;
+	m->slider3mousedown = false;
+	m->slider4mousedown = false;
+
 	POINT pos;
 	GetCursorPos(&pos);
 	ScreenToClient(m->hwnd, &pos);
@@ -655,7 +788,15 @@ void RightUp(GlobalParams* m) {
 	ScreenToClient(m->hwnd, &pos);
 		m->menuVector = {
 
-			
+			{"Blank Image{s}",
+				[m]() -> bool {
+					if (AllocateBlankImage(m, 0xFFFFFFFF)) {
+						ShowResizeDialog(m);
+					}
+					return true;
+				},
+			},
+
 			{"Toggle Smoothing{s}",
 				[m]() -> bool {
 					m->smoothing = !m->smoothing;
@@ -663,21 +804,21 @@ void RightUp(GlobalParams* m) {
 				},
 			},
 
-			{"Undo",
+			{"Undo (CTRL+Z)",
 				[m]() -> bool {
 					UndoBus(m);
 					return true;
 				},
 			},
 
-			{"Redo{s}",
+			{"Redo (CTRL+Y){s}",
 				[m]() -> bool {
 					RedoBus(m);
 					return true;
 				},
 			},
 
-			{"Resize Image",
+			{"Resize Image [CTRL+R]",
 				[m]() -> bool {
 					ShowResizeDialog(m);
 					//ResizeImageToSize(m);
@@ -741,7 +882,7 @@ void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 
 	if ((GetKeyState(VK_MENU) & 0x8000)&&m->drawmode) {// why do they call the alt key VK_MENU
 		m->drawSize *= v;
-		MouseMove(m);
+		RedrawSurface(m);
 	}
 	else {
 		NewZoom(m, v, true);

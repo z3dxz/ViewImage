@@ -10,19 +10,22 @@
 #define IDB_PNG3                        113
 #define IDB_BITMAP1                     114
 #define IDB_PNG4                        115
+#define IDB_PNG5                        116
 #define WidthPBox                       1001
 #define HeightPBox                      1002
 #define parameters_dialog_baba          1003
 #define ConfirmBBox                     1004
 #define CancelBBox                      1005
+#define ptxt                            1007
+#define lc2                             1009
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        116
+#define _APS_NEXT_RESOURCE_VALUE        117
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1006
+#define _APS_NEXT_CONTROL_VALUE         1009
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
