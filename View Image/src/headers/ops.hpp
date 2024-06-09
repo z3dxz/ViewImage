@@ -1,13 +1,13 @@
 #pragma once
 #include <iostream>
 #include <algorithm>
-#include "../gaussian_blur_template.h"
-#include "globalvar.h"
+#include "../gaussian_blur_template.hpp"
+#include "globalvar.hpp"
 #include <Windows.h>
-#include "rendering.h"
-#include "events.h"
-#include "../stb_image.h"
-#include "../stb_image_write.h"
+#include "rendering.hpp"
+#include "events.hpp"
+#include "../stb_image.hpp"
+#include "../stb_image_write.hpp"
 
 
 #pragma region Memory

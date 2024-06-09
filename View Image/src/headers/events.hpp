@@ -1,11 +1,11 @@
 #pragma once
-#include "globalvar.h"
-#include "ops.h"
-#include "rendering.h"
-#include "imgload.h"
-#include "leftrightlogic.h"
+#include "globalvar.hpp"
+#include "ops.hpp"
+#include "rendering.hpp"
+#include "imgload.hpp"
+#include "leftrightlogic.hpp"
 #include <string>
-#include "dialogcontrol.h"
+#include "dialogcontrol.hpp"
 
 
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv);

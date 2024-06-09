@@ -53,31 +53,28 @@
     <ClInclude Include="src\stb_image_write.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\events.h">
+    <ClInclude Include="src\headers\events.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\imgload.h">
+    <ClInclude Include="src\headers\imgload.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\globalvar.h">
+    <ClInclude Include="src\headers\globalvar.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\ops.h">
+    <ClInclude Include="src\headers\ops.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\rendering.h">
+    <ClInclude Include="src\headers\rendering.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\leftrightlogic.h">
+    <ClInclude Include="src\headers\leftrightlogic.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\gaussian_blur_template.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\dialogcontrol.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\headers\toolbar_engine.h">
+    <ClInclude Include="src\headers\dialogcontrol.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

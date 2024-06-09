@@ -2,7 +2,7 @@
 #include <Windows.h>
 #include <iostream>
 #include <string>
-#include "globalvar.h"
+#include "globalvar.hpp"
 
 
 //void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width, int height, bool invert);

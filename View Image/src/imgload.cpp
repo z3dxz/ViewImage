@@ -1,9 +1,9 @@
-#include "headers/imgload.h"
-#include "headers/globalvar.h"
-#include "stb_image.h"
-#include "headers/leftrightlogic.h"
-#include "stb_image_write.h"
-#include "headers/ops.h"
+#include "headers/imgload.hpp"
+#include "headers/globalvar.hpp"
+#include "stb_image.hpp"
+#include "headers/leftrightlogic.hpp"
+#include "stb_image_write.hpp"
+#include "headers/ops.hpp"
 #include <shlobj.h>
 
 bool CheckIfStandardFile(const char* filepath) {

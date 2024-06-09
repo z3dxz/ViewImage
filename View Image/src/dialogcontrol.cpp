@@ -1,5 +1,5 @@
-#include "headers/dialogcontrol.h"
-#include "../resource.h"
+#include "headers/dialogcontrol.hpp"
+#include "../resource.hpp"
 #include <Uxtheme.h>
 #include <dwmapi.h>
 

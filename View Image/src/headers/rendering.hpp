@@ -1,6 +1,6 @@
 #pragma once
-#include "ops.h"
-#include "globalvar.h"
+#include "ops.hpp"
+#include "globalvar.hpp"
 #include <algorithm>
 #include <iostream>
 #include <cmath>

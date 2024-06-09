@@ -1,5 +1,5 @@
 
-#include "headers/rendering.h"
+#include "headers/rendering.hpp"
 #include <vector>
 #include <thread>
 #include <time.h>

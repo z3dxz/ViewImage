@@ -1,9 +1,9 @@
-#include "headers/ops.h"
-#include "headers/imgload.h"
-#include "../resource.h"
+#include "headers/ops.hpp"
+#include "headers/imgload.hpp"
+#include "../resource.hpp"
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image_resize.h"
+#include "stb_image_resize.hpp"
 
 #pragma region File
 

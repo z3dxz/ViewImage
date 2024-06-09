@@ -8,14 +8,14 @@
 #include <iostream>
 #include <thread>
 #include <string>
-#include "../resource.h"
+#include "../resource.hpp"
 #include <cstdint>
-#include "headers/ops.h"
+#include "headers/ops.hpp"
 #include <dwmapi.h>
 #include <uxtheme.h>
-#include "headers/globalvar.h"
-#include "headers/imgload.h"
-#include "headers/events.h"
+#include "headers/globalvar.hpp"
+#include "headers/imgload.hpp"
+#include "headers/events.hpp"
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "uxtheme.lib")

@@ -1,5 +1,5 @@
 #pragma once
-#include "globalvar.h"
-#include "ops.h"
+#include "globalvar.hpp"
+#include "ops.hpp"
 
 int ShowResizeDialog(GlobalParams* m0);

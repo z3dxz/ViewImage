@@ -171,15 +171,14 @@
   <ItemGroup>
     <ClInclude Include="resource.h" />
     <ClInclude Include="src\gaussian_blur_template.h" />
-    <ClInclude Include="src\headers\dialogcontrol.h" />
-    <ClInclude Include="src\headers\events.h" />
+    <ClInclude Include="src\headers\dialogcontrol.hpp" />
+    <ClInclude Include="src\headers\events.hpp" />
     <ClInclude Include="src\font.h" />
-    <ClInclude Include="src\headers\leftrightlogic.h" />
-    <ClInclude Include="src\headers\ops.h" />
-    <ClInclude Include="src\headers\globalvar.h" />
-    <ClInclude Include="src\headers\imgload.h" />
-    <ClInclude Include="src\headers\rendering.h" />
-    <ClInclude Include="src\headers\toolbar_engine.h" />
+    <ClInclude Include="src\headers\leftrightlogic.hpp" />
+    <ClInclude Include="src\headers\ops.hpp" />
+    <ClInclude Include="src\headers\globalvar.hpp" />
+    <ClInclude Include="src\headers\imgload.hpp" />
+    <ClInclude Include="src\headers\rendering.hpp" />
     <ClInclude Include="src\stb_image.h" />
     <ClInclude Include="src\stb_image_write.h" />
   </ItemGroup>

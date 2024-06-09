@@ -1,5 +1,5 @@
-#include "headers/events.h" // e
-#include "../resource.h"
+#include "headers/events.hpp" // e
+#include "../resource.hpp"
 #include <Shlwapi.h>
 #include <vector>
 
