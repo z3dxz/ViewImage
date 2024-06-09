@@ -95,7 +95,7 @@ void PrintImageToPrinter(uint32_t* image, int width, int height, HDC printerDC) 
 
 	uint32_t* temp = (uint32_t*)malloc(width * height * 4);
 	for (int i = 0; i < width * height; i++) {
-		*(temp+i) = InvertColorChannels((*(image+i)), true);
+		*(temp+i) = (*(image+i));
 	}
 
 	if (!image) {
@@ -118,8 +118,20 @@ void PrintImageToPrinter(uint32_t* image, int width, int height, HDC printerDC) 
 	StartDoc(printerDC, &docInfo);
 	StartPage(printerDC);
 
+	// Get printer page dimensions
+	int printerWidth = GetDeviceCaps(printerDC, HORZRES);
+	int printerHeight = GetDeviceCaps(printerDC, VERTRES);
+
+	// Calculate scaling factors
+	float scaleX = static_cast<float>(printerWidth) / width;
+	float scaleY = static_cast<float>(printerHeight) / height;
+
+	// Set up printing parameters
+	int destWidth = static_cast<int>(width * scaleX);
+	int destHeight = static_cast<int>(height * scaleY);
+
 	// Print the image to the printer
-	StretchDIBits(printerDC, 0, 0, GetDeviceCaps(printerDC, HORZRES), (float)(GetDeviceCaps(printerDC, HORZRES)/width)*height,
+	StretchDIBits(printerDC, 0, 0,destWidth, destHeight,
 		0, 0, width, height, temp, &bmpInfo, DIB_RGB_COLORS, SRCCOPY);
 
 	// End the print job
@@ -172,29 +184,21 @@ void ResizeImageToSize(GlobalParams* m, int width, int height) {
 }
 */
 
-void ResizeImageToSize(GlobalParams* m, int nwidth, int nheight) {
-
-
-	createUndoStep(m);
+void performResize(GlobalParams* m, void** memory, int owidth, int oheight, int nwidth, int nheight) {
 	// allocate the copy for temporary reference
-	void* tempOldBuffer = malloc(m->imgwidth * m->imgheight * 4);
-	memcpy(tempOldBuffer, m->imgdata, m->imgwidth * m->imgheight * 4);
-
-	int owidth = m->imgwidth;
-	int oheight = m->imgheight;
+	void* tempOldBuffer = malloc(owidth * oheight* 4);
+	memcpy(tempOldBuffer, *memory, owidth * oheight * 4);
 
 
-	//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
-	// 
-	// reallocate my image data boolean to suit the new data
+	// reallocate my image data to suit the new data
 
-	free(m->imgdata);
-	m->imgdata = malloc(nwidth * nheight * 4);
-	m->imgwidth = nwidth;
-	m->imgheight = nheight;
+	free(*memory);
+	*memory = malloc(nwidth * nheight * 4);
+	//m->imgwidth = nwidth;
+	//m->imgheight = nheight;
 
 	// do
-	stbir_resize_uint8((unsigned char*)tempOldBuffer, owidth, oheight, 0, (unsigned char*)m->imgdata, nwidth, nheight, 0, 4);
+	stbir_resize_uint8((unsigned char*)tempOldBuffer, owidth, oheight, 0, (unsigned char*)*memory, nwidth, nheight, 0, 4);
 
 	m->shouldSaveShutdown = true;
 
@@ -203,57 +207,55 @@ void ResizeImageToSize(GlobalParams* m, int nwidth, int nheight) {
 	//free(m->imgannotate);
 	//m->imgannotate = malloc(width * height * 4);
 	//memset(m->imgannotate, 0x00, width * height * 4);
-	autozoom(m);
 	//FreeCombineBuffer(m);
 	free(tempOldBuffer);
-	RedrawSurface(m);
-
-
-
-
 }
 
+void ResizeImageToSize(GlobalParams* m, int nwidth, int nheight) {
 
-void rotateImage90Degrees(GlobalParams* m) {
 	createUndoStep(m);
-	// allocate the copy for tempoary reference
-	void* tempOldBuffer = malloc(m->imgwidth * m->imgheight * 4);
-	memcpy(tempOldBuffer, m->imgdata, m->imgwidth * m->imgheight * 4);
-	
-	int owidth = m->imgwidth;
-	int oheight = m->imgheight;
 
-	int nwidth = m->imgheight;
-	int nheight = m->imgwidth; // reverse it
-
-	//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
-	// 
-	// reallocate my image data boolean to suit the new data
-
-	free(m->imgdata);
-	m->imgdata = malloc(nwidth * nheight * 4);
+	performResize(m, &m->imgdata, m->imgwidth, m->imgheight, nwidth, nheight);
+	performResize(m, &m->imgoriginaldata, m->imgwidth, m->imgheight, nwidth, nheight);
 	m->imgwidth = nwidth;
 	m->imgheight = nheight;
+	autozoom(m);
+	RedrawSurface(m);
+}
+
+void rotatememory(GlobalParams* m, int owidth, int oheight, int nwidth, int nheight, void** memory) {
+	// allocate the copy for tempoary reference
+	void* tempOldBuffer = malloc(owidth * oheight * 4);
+	memcpy(tempOldBuffer, *memory, owidth * oheight * 4);
+
+	free(*memory);
+	*memory = malloc(nwidth * nheight * 4);
 
 	// do
 	for (size_t y = 0; y < nheight; y++) {
 		for (size_t x = 0; x < nwidth; x++) {
-			*GetMemoryLocation(m->imgdata, x, y, nwidth, nheight) = *GetMemoryLocation(tempOldBuffer, y, nwidth - 1 - x, owidth, oheight);
+			*GetMemoryLocation(*memory, x, y, nwidth, nheight) = *GetMemoryLocation(tempOldBuffer, y, nwidth - 1 - x, owidth, oheight);
 		}
 	}
-	
-	m->shouldSaveShutdown = true;
-	
-	//m->undoStep = 0;
-	//m->undoData.clear();
-	//free(m->imgannotate);
-	//m->imgannotate = malloc(width * height * 4);
-	//memset(m->imgannotate, 0x00, width * height * 4);
-	autozoom(m);
-	//FreeCombineBuffer(m);
+
+
 	free(tempOldBuffer);
+}
+
+void rotateImage90Degrees(GlobalParams* m) {
+
+	createUndoStep(m);
+	int oldw = m->imgwidth;
+	int oldh = m->imgheight;
+	int neww = m->imgheight;
+	int newh = m->imgwidth;
+	rotatememory(m, oldw,oldh,neww ,newh, &m->imgdata);
+	rotatememory(m, m->imgwidth, m->imgheight, m->imgheight, m->imgwidth, &m->imgoriginaldata);
+	m->imgwidth = neww;
+	m->imgheight = newh;
+	m->shouldSaveShutdown = true;
+	autozoom(m);
 	RedrawSurface(m);
-	
 }
 /*
 
@@ -340,7 +342,7 @@ void autozoom(GlobalParams* m) {
 }
 
 
-void NewZoom(GlobalParams* m, float v, int mouse) {
+void NewZoom(GlobalParams* m, float v, int mouse, bool shouldRoundZoom) {
 
 	POINT p;
 	GetCursorPos(&p);
@@ -358,18 +360,19 @@ void NewZoom(GlobalParams* m, float v, int mouse) {
 	int new_width = m->width * v;
 	int new_height = m->height * v;
 	if (mouse) {
-
 		m->iLocX = p.x + distance_x * v;
 		m->iLocY = p.y + distance_y * v;
 	}
 	m->mscaler *= v;
-	m->mscaler = roundzoom(m->mscaler);
+	if (shouldRoundZoom) {
+		m->mscaler = roundzoom(m->mscaler);
+	}
 
 	RedrawSurface(m);
 }
 
 
-uint32_t InvertColorChannels(uint32_t d, bool should) {
+uint32_t InvertCC(uint32_t d, bool should) {
 	if (should) {
 		return (d & 0xFF00FF00) | ((d & 0x00FF0000) >> 16) | ((d & 0x000000FF) << 16);
 	}
@@ -378,16 +381,40 @@ uint32_t InvertColorChannels(uint32_t d, bool should) {
 	}
 }
 
+void InvertAllColorChannels(uint32_t* buffer, int w, int h) {
+	
+	for (int y = 0; y < h; y++) {
+		for (int x = 0; x < w; x++) {
+			uint32_t* mem = GetMemoryLocation(buffer, x, y, w, h);
+			*mem = InvertCC(*mem, true);
+		}
+	}
+}
+
+uint8_t getAlpha(uint32_t color) {
+	return (color >> 24) & 0xFF;
+}
 
 double gammaCorrect(double value, double gamma) {
     return std::pow(value, 1.0 / gamma);
 }
 
 
+uint8_t lerpLinear(uint8_t a, uint8_t b, float t) {
+	return static_cast<uint8_t>((1.0f - t) * a + t * b);
+}
 
 
 uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 {
+	/*
+	
+	if (((float)(rand() % 100) / 100.0f) > alpha) {
+		return color1;
+
+	}
+	return color2;
+	*/
 	// Extract the individual color channels from the input values
 	uint8_t a1 = (color1 >> 24) & 0xFF;
 	uint8_t r1 = (color1 >> 16) & 0xFF;
@@ -411,54 +438,51 @@ uint32_t lerp(uint32_t color1, uint32_t color2, float alpha)
 
 
 
-
 const int TABLE_SIZE = 256;
 
-uint8_t  gamma_table[TABLE_SIZE];
-uint8_t  inv_gamma_table[TABLE_SIZE];
+float gamma_table[TABLE_SIZE];
 
-void init_gamma_tables(float gamma) {
+void init_gamma_table(float gamma) {
 	for (int i = 0; i < TABLE_SIZE; ++i) {
-		gamma_table[i] = (uint8_t)(std::pow(i / 255.0f, gamma)*255.0f);
-		inv_gamma_table[i] = (uint8_t)(std::pow(i / 255.0f, 1.0f/gamma)*255.0f);
+		gamma_table[i] = std::pow(i / 255.0f, gamma);
 	}
 }
 
 bool yes = 0;
-uint32_t lerp_gammacorrect(uint32_t color1, uint32_t color2, float alpha) {
+uint32_t lerp_gc(uint32_t color1, uint32_t color2, float alpha) {
+
+
+	float gamma = 2.2f;
 	if (!yes) {
-		init_gamma_tables(2.2);
+		init_gamma_table(gamma);
 		yes = 1;
 	}
 
 	// Extract the individual color channels from the input values and apply gamma correction using the lookup table
-	uint8_t a1 = gamma_table[(color1 >> 24) & 0xFF];
-	uint8_t r1 = gamma_table[(color1 >> 16) & 0xFF];
-	uint8_t g1 = gamma_table[(color1 >> 8) & 0xFF];
-	uint8_t b1 = gamma_table[color1 & 0xFF];
+	 float a1 = gamma_table[(color1 >> 24) & 0xFF];
+    float r1 = gamma_table[(color1 >> 16) & 0xFF];
+    float g1 = gamma_table[(color1 >> 8) & 0xFF];
+    float b1 = gamma_table[color1 & 0xFF];
 
-	uint8_t a2 = gamma_table[(color2 >> 24) & 0xFF];
-	uint8_t r2 = gamma_table[(color2 >> 16) & 0xFF];
-	uint8_t g2 = gamma_table[(color2 >> 8) & 0xFF];
-	uint8_t b2 = gamma_table[color2 & 0xFF];
+    float a2 = gamma_table[(color2 >> 24) & 0xFF];
+    float r2 = gamma_table[(color2 >> 16) & 0xFF];
+    float g2 = gamma_table[(color2 >> 8) & 0xFF];
+    float b2 = gamma_table[color2 & 0xFF];
 
-	// Calculate the lerped color values for each channel
-	uint8_t a = (1 - alpha) * a1 + alpha * a2;
-	uint8_t r = (1 - alpha) * r1 + alpha * r2;
-	uint8_t g = (1 - alpha) * g1 + alpha * g2;
-	uint8_t b = (1 - alpha) * b1 + alpha * b2;
+    // Calculate the lerped color values for each channel
+    float a = (1 - alpha) * a1 + alpha * a2;
+    float r = (1 - alpha) * r1 + alpha * r2;
+    float g = (1 - alpha) * g1 + alpha * g2;
+    float b = (1 - alpha) * b1 + alpha * b2;
 
-	// Undo gamma correction
+    // Undo gamma correction
+    a = std::pow(a, 1.0f / gamma);
+    r = std::pow(r, 1.0f / gamma);
+    g = std::pow(g, 1.0f / gamma);
+    b = std::pow(b, 1.0f / gamma);
 
-	
-	a = inv_gamma_table[a];
-	r = inv_gamma_table[r];
-	g = inv_gamma_table[g];
-	b = inv_gamma_table[b];
-	
-
-	// Combine the lerped color channels into a single 32-bit value
-	return (a << 24) | (r << 16) | (g << 8) | b;
+    // Combine the lerped color channels into a single 32-bit value
+    return (static_cast<uint32_t>(a * 255) << 24) | (static_cast<uint32_t>(r * 255) << 16) | (static_cast<uint32_t>(g * 255) << 8) | static_cast<uint32_t>(b * 255);
 }
 
 
@@ -723,4 +747,116 @@ double remap(double value, double fromLow, double fromHigh, double toLow, double
 	result = min(max(result, toLow), toHigh);
 
 	return result;
+}
+
+void ConvertToPremultipliedAlpha(uint32_t* imageData, int width, int height) {
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			uint32_t pixel = imageData[y * width + x];
+			uint8_t alpha = (pixel >> 24) & 0xFF;
+			uint8_t red = (pixel >> 16) & 0xFF;
+			uint8_t green = (pixel >> 8) & 0xFF;
+			uint8_t blue = pixel & 0xFF;
+
+			// Convert RGB channels to premultiplied alpha
+			red = (red * alpha) / 255;
+			green = (green * alpha) / 255;
+			blue = (blue * alpha) / 255;
+
+			// Update the pixel with premultiplied alpha values
+			imageData[y * width + x] = (alpha << 24) | (red << 16) | (green << 8) | blue;
+		}
+	}
+}
+
+bool CopyImageToClipboard(GlobalParams* m, void* imageData, int width, int height){ // USED CHATGPT BECAUSE I DONT WANT TO REINVENT THE WHEEL WHEN USING THIS STUPID API
+	// Initialize COM for clipboard operations
+	if (FAILED(OleInitialize(NULL)))
+		return false;
+
+	// Create a device context for the screen
+	HDC screenDC = GetDC(NULL);
+	HDC memDC = CreateCompatibleDC(screenDC);
+	ReleaseDC(NULL, screenDC);
+
+	// Create a bitmap and select it into the device context
+	BITMAPINFO bmi;
+	ZeroMemory(&bmi, sizeof(bmi));
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bmi.bmiHeader.biWidth = width;
+	bmi.bmiHeader.biHeight = -height; // negative height for top-down DIB
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 32;
+	bmi.bmiHeader.biCompression = BI_RGB;
+	bmi.bmiHeader.biSizeImage = 0; // Set to 0 for BI_RGB
+	HBITMAP hBitmap = CreateDIBSection(memDC, &bmi, DIB_RGB_COLORS, NULL, NULL, 0);
+
+	if (hBitmap == NULL) {
+		DeleteDC(memDC);
+		OleUninitialize();
+		return false;
+	}
+
+	// Copy the image data to the bitmap
+	SetDIBits(memDC, hBitmap, 0, height, imageData, &bmi, DIB_RGB_COLORS);
+
+	// Select the bitmap into the device context
+	HBITMAP hOldBitmap = (HBITMAP)SelectObject(memDC, hBitmap);
+
+	// Open the clipboard
+	if (!OpenClipboard(NULL)) {
+		DeleteObject(hBitmap);
+		DeleteDC(memDC);
+		OleUninitialize();
+		return false;
+	}
+
+	// Empty the clipboard
+	EmptyClipboard();
+	
+	// Set PNG format
+	HANDLE hDIB = NULL;
+	{
+		DWORD dwBmpSize = ((width * 32 + 31) / 32) * 4 * height; // Calculate size of image buffer (DWORD aligned)
+		hDIB = GlobalAlloc(GHND, sizeof(BITMAPINFOHEADER) + dwBmpSize);
+		if (hDIB != NULL) {
+			LPVOID pv = GlobalLock(hDIB);
+			if (pv != NULL) {
+				BITMAPINFOHEADER* pbmi = (BITMAPINFOHEADER*)pv;
+				pbmi->biSize = sizeof(BITMAPINFOHEADER);
+				pbmi->biWidth = width;
+				pbmi->biHeight = -height; // Corrected height for bottom-up DIB
+				pbmi->biPlanes = 1;
+				pbmi->biBitCount = 32;
+				pbmi->biCompression = BI_RGB;
+				pbmi->biSizeImage = dwBmpSize;
+
+				BYTE* pData = (BYTE*)pbmi + sizeof(BITMAPINFOHEADER);
+				memcpy(pData, imageData, dwBmpSize);
+				for (int y = 0; y < height; y++) {
+					for (int x = 0; x < width; x++) {
+						*GetMemoryLocation(pData, x, y, width, height) = *GetMemoryLocation(pData, x, y, width, height);
+					}
+				}
+				ConvertToPremultipliedAlpha((uint32_t*)pData, width, height);
+				GlobalUnlock(hDIB);
+			}
+		}
+		
+	}
+	SetClipboardData(CF_DIB, hDIB); // CF_DIBV5 may not be supported on all systems
+
+	// Clean up
+	CloseClipboard();
+	SelectObject(memDC, hOldBitmap);
+	DeleteObject(hBitmap);
+	DeleteDC(memDC);
+	OleUninitialize();
+
+	return true;
+}
+
+uint32_t change_alpha(uint32_t color, uint8_t new_alpha) {
+	// Assuming color format is 0xRRGGBBAA
+	return (color & 0xFFFFFF) | (static_cast<uint32_t>(new_alpha) << 24);
 }

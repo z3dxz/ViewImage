@@ -6,6 +6,7 @@
 
 #include <windows.h>
 #include <iostream>
+#include <thread>
 #include <string>
 #include "../resource.h"
 #include <cstdint>
@@ -32,6 +33,39 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 // Note: Although the code is C++, the code is mostly in C style. Object oriented programming is not apparent and "classes" are just
 // structs being passed through arguments
 
+/*
+
+	DWORD currentTime = timeGetTime();
+	DWORD deltaTime = currentTime - previousTime;
+	previousTime = timeGetTime();
+
+	HWND temp = GetActiveWindow();
+	if (temp == gp.hwnd) {
+
+		bool isW = GetKeyState('W') & 0x8000;
+		bool isA = GetKeyState('A') & 0x8000;
+		bool isS = GetKeyState('S') & 0x8000;
+		bool isD = GetKeyState('D') & 0x8000;
+
+
+		if (isW) {
+			gp.iLocY += deltaTime;
+		}
+		if (isA) {
+			gp.iLocX += deltaTime;
+		}
+		if (isS) {
+			gp.iLocY -= deltaTime;
+		}
+		if (isD) {
+			gp.iLocX -= deltaTime;
+		}
+		if (isW || isA || isS || isD) {
+
+			RedrawSurface(&gp);
+		}
+	}
+*/
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
 
@@ -80,7 +114,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		return 0;
 	}
 
-
+	
 	bool running = true;
 	static DWORD previousTime;
 	while (running) {
@@ -125,9 +159,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 	}
 
+
 	return 0;
 }
 
+
+bool keydownprotocol = false;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
@@ -145,8 +182,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	{
 
 		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lparam;
-		lpMMI->ptMinTrackSize.x = 340;
-		lpMMI->ptMinTrackSize.y = 40 + 70;
+		lpMMI->ptMinTrackSize.x = 505;
+		lpMMI->ptMinTrackSize.y = 184;
 
 
 		break;
@@ -172,18 +209,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
 		break;
 	}
+	case WM_RBUTTONDOWN: {
+		RightDown(&gp);
+		break;
+	}
 	case WM_MOUSEMOVE: {
 		MouseMove(&gp);
 		break;
 	}
-	case WM_KEYDOWN: {
 
-		KeyDown(&gp, wparam, lparam);
+	case WM_KEYDOWN: {
+		bool is = keydownprotocol;
+		if (!is) {
+			KeyDown(&gp, wparam, lparam);
+		}
+		keydownprotocol = true;
 		break;
 	}
+
 	case WM_SIZE: {
 		Size(&gp);
 
+		break;
+	}
+	case WM_KEYUP: {
+		keydownprotocol = false;
+		RedrawSurface(&gp);
 		break;
 	}
 	case WM_MOUSEWHEEL: {
@@ -215,7 +266,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		SetDIBitsToDevice(gp.hdc, 0, 0, gp.width, gp.height, 0, 0, 0, gp.height, gp.scrdata, &bmi, DIB_RGB_COLORS);
 		return DefWindowProc(hwnd, msg, wparam, lparam);
 	}
+	case WM_SETFOCUS: {
+		gp.sleepmode = false;
+		Beep(2000, 20);
+		break;
+	}
 	case WM_KILLFOCUS: {
+		gp.sleepmode = true;
+		Beep(500, 20);
 		for (int i = 0; i < 50; i++) {
 			ShowCursor(500);
 		}

@@ -202,6 +202,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="cursor1.cur" />
+    <None Include="cursor2.cur" />
     <None Include="cursor5.cur" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

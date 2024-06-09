@@ -11,6 +11,7 @@
 #define IDB_BITMAP1                     114
 #define IDB_PNG4                        115
 #define IDB_PNG5                        116
+#define IDC_CURSOR2                     117
 #define WidthPBox                       1001
 #define HeightPBox                      1002
 #define parameters_dialog_baba          1003
@@ -23,7 +24,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        117
+#define _APS_NEXT_RESOURCE_VALUE        118
 #define _APS_NEXT_COMMAND_VALUE         40001
 #define _APS_NEXT_CONTROL_VALUE         1009
 #define _APS_NEXT_SYMED_VALUE           101

@@ -16,7 +16,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 
 	m->cd = std::string(buffer);
 
-	//InitFont(hwnd, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
+	//InitFont(hwnd, "segoeui.TTF", 14);
 	size_t scrsize = m->width * m->height * 4;
 	m->scrdata = malloc(scrsize);
 	for (uint32_t i = 0; i < m->width * m->height; i++) {
@@ -40,7 +40,7 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, NULL, 0, NULL, NULL);
 
 
-	InitFont(m, "C:\\Windows\\Fonts\\segoeui.TTF", 14);
+	InitFont(m, "segoeui.TTF", 14);
 
 	char* path = (char*)malloc(size_needed);
 	WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, path, size_needed, NULL, NULL);
@@ -82,86 +82,9 @@ uint32_t PickColorFromDialog(GlobalParams* m, uint32_t def, bool* success) {
 	}
 }
 
-bool ToolbarMouseDown(GlobalParams* m) {
-	if (m->isMenuState) {
-		return 1;
-	}
-	m->toolmouseDown = true;
-	if (m->drawmode) {
-		POINT mPP;
-		GetCursorPos(&mPP);
-		ScreenToClient(m->hwnd, &mPP);
-		if (mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom) {
-			m->drawmousedown = true;
-			createUndoStep(m);
-		}
-	}
-
-	// add toolbar clicky here
-	{
-		POINT mp;
-		GetCursorPos(&mp);
-		ScreenToClient(m->hwnd, &mp);
-		// fullscreen icon
-		if ((mp.x > m->width - 36 && mp.x < m->width - 13) && (mp.y > 12 && mp.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
-			ToggleFullscreen(m); // TODO: please make a seperate icon for the exiting fullscreen
-
-			return 0;
-		}
-	}
-
-	if(m->drawmode)
-	{
-		POINT mp;
-		GetCursorPos(&mp);
-		ScreenToClient(m->hwnd, &mp);
-		// this is for the drawing toolbar ONLY
-
-		int colorBeginX = m->drawMenuOffsetX + 51;
-		int colorEndX = m->drawMenuOffsetX + 69;
-		int colorBeginY = m->drawMenuOffsetY + 14;
-		int colorEndY = m->drawMenuOffsetY + 32;
-
-		int slider1begin = m->drawMenuOffsetX + m->slider1begin;
-		int slider1end = m->drawMenuOffsetX + m->slider1end;
-
-		int slider2begin = m->drawMenuOffsetX + m->slider2begin;
-		int slider2end = m->drawMenuOffsetX + m->slider2end;
-
-		int sliderYb = m->drawMenuOffsetY;
-		int sliderYe = m->drawMenuOffsetY+40;
-
-
-
-		if ((mp.x > colorBeginX && mp.x < colorEndX) && (mp.y > colorBeginY && mp.y < colorEndY)) { //color icon coordinates
-			// open color picker
-			bool success = true;
-			uint32_t c = PickColorFromDialog(m, m->a_drawColor, &success);
-			if (success) {
-				m->a_drawColor = c;
-			}
-			return 0;
-		}
-
-		//  I copied these to the rendering function so that I can make a hover effect
-		if ((mp.x > slider1begin && mp.x < slider1end) && (mp.y > sliderYb && mp.y < sliderYe)) {
-			m->slider1mousedown = true;
-		}
-
-		if ((mp.x > slider2begin && mp.x < slider2end) && (mp.y > sliderYb && mp.y < sliderYe)) {
-			m->slider2mousedown = true;
-		}
-
-	}
-
-	POINT mPP;
-	GetCursorPos(&mPP);
-	ScreenToClient(m->hwnd, &mPP);
-	uint32_t id = getXbuttonID(m, mPP);
-
-	
-
-	if (m->imgwidth > 0 || id == 0) {  } else { return 1; }
+int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
+	if (m->imgwidth > 0 || id == 0) {}
+	else { return 1; }
 	switch (id) {
 	case 0:
 		// open
@@ -175,11 +98,11 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		return 0;
 	case 2:
 		// zoom in
-		NewZoom(m, 1.25f, 2);
+		NewZoom(m, 1.25f, 2, true); // ALSO: Use this for the + and - hotkeys for ZOOM
 		return 0;
 	case 3:
 		// zoom out
-		NewZoom(m, 0.8f, 2);
+		NewZoom(m, 0.8f, 2, true); // ALSO HERE TOO 
 		return 0;
 	case 4:
 		// zoom fit
@@ -234,10 +157,17 @@ bool ToolbarMouseDown(GlobalParams* m) {
 	case 9: {
 		// print
 		Print(m);
-		
+
 		return 0;
 	}
 	case 10: {
+
+		// copy
+		CopyImageToClipboard(m, m->imgdata, m->imgwidth, m->imgheight);
+
+		return 0;
+	}
+	case 11: {
 
 		// image info
 
@@ -247,7 +177,7 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		if (!m->fpath.empty()) {
 			txt = m->fpath;
 		}
-		sprintf(str, "Image Information:\n%s\nWidth: %d\nHeight: %d\n\nAbout:\nMade for cosine64.com",txt.c_str(), m->imgwidth, m->imgheight);
+		sprintf(str, "Image Information:\n%s\nWidth: %d\nHeight: %d\n\nAbout:\nVisit cosine64.com for more quality software\nVersion: %s", txt.c_str(), m->imgwidth, m->imgheight, REAL_BIG_VERSION_BOOLEAN);
 
 		MessageBox(m->hwnd, str, "Information", MB_OK);
 		return 0;
@@ -257,11 +187,122 @@ bool ToolbarMouseDown(GlobalParams* m) {
 	return 1;
 }
 
+void CloseToolbarWhenInactive(GlobalParams* m, POINT& k) {
+	if (k.x > m->menuX && k.y > m->menuY && k.x < (m->menuX + m->menuSX) && k.y < (m->menuY + m->menuSY)) {
+
+	}
+	else {
+
+		m->isMenuState = false;
+		RedrawSurface(m);
+	}
+}
+
+
+
+bool ToolbarMouseDown(GlobalParams* m) {
+	if (m->eyedroppermode) {
+		return 0;
+	}
+	POINT mPP;
+	GetCursorPos(&mPP);
+	ScreenToClient(m->hwnd, &mPP);
+	if (m->isMenuState) {
+		CloseToolbarWhenInactive(m, mPP);
+		//return 1;
+	}
+
+	if ((mPP.x > m->menuX && mPP.y > m->menuY && mPP.x < (m->menuX + m->menuSX) && mPP.y < (m->menuY + m->menuSY))&&m->isMenuState) { // check if the mouse is over a menu. ALSO COPIED TO RIGHT MOUSE DOWN
+		return 1;
+	}
+
+
+	if (m->drawmode)
+	{
+		// this is for the drawing toolbar ONLY
+
+		int colorBeginX = m->drawMenuOffsetX + 51;
+		int colorEndX = m->drawMenuOffsetX + 69;
+		int colorBeginY = m->drawMenuOffsetY + 14;
+		int colorEndY = m->drawMenuOffsetY + 32;
+
+		int slider1begin = m->drawMenuOffsetX + m->slider1begin;
+		int slider1end = m->drawMenuOffsetX + m->slider1end;
+
+		int slider2begin = m->drawMenuOffsetX + m->slider2begin;
+		int slider2end = m->drawMenuOffsetX + m->slider2end;
+
+		int sliderYb = m->drawMenuOffsetY;
+		int sliderYe = m->drawMenuOffsetY + 40;
+
+		int softBeginX = m->drawMenuOffsetX + 461;
+		int softEndX = m->drawMenuOffsetX + 479;
+		int softBeginY = m->drawMenuOffsetY + 14;
+		int softEndY = m->drawMenuOffsetY + 32;
+
+		if ((mPP.x > colorBeginX && mPP.x < colorEndX) && (mPP.y > colorBeginY && mPP.y < colorEndY)) { //color icon coordinates
+			// open color picker
+			bool success = true;// alpha to 0 weird windows bug
+			uint32_t c = change_alpha(PickColorFromDialog(m, InvertCC(change_alpha(m->a_drawColor,0),true), &success), 255);
+			if (success) {
+				m->a_drawColor = InvertCC(c, true);
+			}
+			RedrawSurface(m);
+			return 0;
+		}
+		if ((mPP.x > softBeginX && mPP.x < softEndX) && (mPP.y > softBeginY && mPP.y < softEndY)) { //color icon coordinates
+			// open color picker
+			m->a_softmode = !m->a_softmode;
+			RedrawSurface(m);
+			return 0;
+		}
+
+
+		//  I copied these to the rendering function so that I can make a hover effect
+		if ((mPP.x > slider1begin && mPP.x < slider1end) && (mPP.y > sliderYb && mPP.y < sliderYe)) { // these are also found in the scroll USE CONTROL F
+			m->slider1mousedown = true;
+		}
+
+		if ((mPP.x > slider2begin && mPP.x < slider2end) && (mPP.y > sliderYb && mPP.y < sliderYe)) {
+			m->slider2mousedown = true;
+		}
+
+	}
+
+	m->toolmouseDown = true;
+	if (m->drawmode) {
+		if (mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom) {// recopied over and over. right now im putting in right mouse down
+			m->drawtype = 1;
+			TurnOnDraw(m);
+			createUndoStep(m);
+
+		}
+	}
+
+	// add toolbar clicky here
+	{
+		// fullscreen icon
+		if ((mPP.x > m->width - 36 && mPP.x < m->width - 13) && (mPP.y > 12 && mPP.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
+			ToggleFullscreen(m); // TODO: please make a seperate icon for the exiting fullscreen
+
+			return 0;
+		}
+	}
+
+
+	uint32_t id = getXbuttonID(m, mPP);
+
+	return PerformCasedBasedOperation(m, id);
+}
+
 void MouseDown(GlobalParams* m) {
 
-
+	if (m->eyedroppermode) {
+		return;
+	}
 	m->lastMouseX = -1;
 	m->lastMouseY = -1;
+
 	m->lockimgoffx = m->iLocX;
 	m->lockimgoffy = m->iLocY;
 	GetCursorPos(&m->LockmPos);
@@ -269,41 +310,18 @@ void MouseDown(GlobalParams* m) {
 	GetCursorPos(&k);
 	ScreenToClient(m->hwnd, &k);
 
-
-	if (k.x > m->menuX && k.y > m->menuY && k.x < (m->menuX + m->menuSX) && k.y < (m->menuY + m->menuSY)) {
-
-	}
-	else {
-		
-		m->isMenuState = false;
-		RedrawSurface(m);
-	}
+	CloseToolbarWhenInactive(m, k);
+	
 
 	if (k.y > m->toolheight) {
 		if(!m->isMenuState)
 		m->mouseDown = true;
 	}
+	MouseMove(m);
 }
 
 
-POINT* sampleLine(GlobalParams* m, double x1, double y1, double x2, double y2, int* outSamples) {
-	float sizex = abs(x2 - x1);
-	float sizey = abs(y2 - y1);
-	float dist = (sqrt(pow(sizex, 2) + pow(sizey, 2)));
-	int numSamples = (dist/(m->drawSize/4))+2;
 
-	POINT* samples = (POINT*)malloc(sizeof(POINT) * numSamples);
-
-	for (int i = 0; i < numSamples; i++) {
-		double t = (double)i / (numSamples - 1);
-		samples[i].x = x1 + t * (x2 - x1);
-		samples[i].y = y1 + t * (y2 - y1);
-	}
-
-	// remember to deallocate
-	*outSamples = numSamples;
-	return samples;
-}
 
 POINT* sampleLine_old(double x1, double y1, double x2, double y2, int numSamples) {
 
@@ -320,69 +338,167 @@ POINT* sampleLine_old(double x1, double y1, double x2, double y2, int numSamples
 	return samples;
 }
 
-uint32_t change_alpha(uint32_t color, uint8_t new_alpha) {
-	// Assuming color format is 0xRRGGBBAA
-	return (color & 0xFFFFFF) | (static_cast<uint32_t>(new_alpha) << 24);
+void TurnOnDraw(GlobalParams* m) {
+	if (!m->drawmousedown) {
+		m->drawmousedown = true;
+	}
 }
+
+void TurnOffDraw(GlobalParams* m) {
+	if (m->drawmousedown) {
+		m->drawmousedown = false;
+	}
+}
+
+POINT* sampleLine(GlobalParams* m, double x1, double y1, double x2, double y2, int* outSamples) {
+	float sizex = abs(x2 - x1);
+	float sizey = abs(y2 - y1);
+	float dist = sqrt(pow(sizex, 2) + pow(sizey, 2));
+	int numSamples = dist / (m->drawSize/ m->a_resolution);
+
+	int qualsamples = numSamples;
+	if (numSamples > 2) { qualsamples--; };
+
+	POINT* samples = (POINT*)malloc(sizeof(POINT) * (qualsamples + 1)); // Include starting point
+
+	float dx = (x2 - x1) / numSamples;
+	float dy = (y2 - y1) / numSamples;
+
+	samples[0].x = x1;
+	samples[0].y = y1;
+
+	for (int i = 1; i <= qualsamples; i++) {
+		samples[i].x = x1 + i * dx;
+		samples[i].y = y1 + i * dy;
+	}
+
+	*outSamples = qualsamples + 1; // Include starting point
+	return samples;
+}
+
+
+
+clock_t start, end;
+double delta_time;
 
 
 void placeDraw(GlobalParams* m, POINT* pos) {
 
+	// draw goes here abcdefghijklmnopqrstuvwxyz
+	start = clock();
 
-	ScreenToClient(m->hwnd, pos);
+	// automatic speed based resolution changer
+	
+	float target_delta_time = 0.016f;
+	float delta_time_difference = target_delta_time - m->ms_time;
+	
+	float adjustment_factor = std::pow(2, delta_time_difference * 10);
 
-	int k = (int)((float)((m->lastMouseX) - m->CoordLeft) * (1.0f / m->mscaler));
-	int v = (int)((float)((m->lastMouseY) - m->CoordTop) * (1.0f / m->mscaler));
+	m->a_resolution *= adjustment_factor;
+	m->a_resolution = max(4.0f, min(30.0f, m->a_resolution));
 
-	int k1 = (int)((float)(pos->x - m->CoordLeft) * (1.0f / m->mscaler));
-	int v1 = (int)((float)(pos->y - m->CoordTop) * (1.0f / m->mscaler));
 
-	if (m->lastMouseX == -1) { k = k1; v = v1; }
+    ScreenToClient(m->hwnd, pos);
 
-	//int samples0 = m->a_hardness;
+    int k = (int)((float)((m->lastMouseX) - m->CoordLeft) * (1.0f / m->mscaler));
+    int v = (int)((float)((m->lastMouseY) - m->CoordTop) * (1.0f / m->mscaler));
 
-	int samples0;
-	POINT* k2 = sampleLine(m, k1, v1, k, v, &samples0);
+    int k1 = (int)((float)(pos->x - m->CoordLeft) * (1.0f / m->mscaler));
+    int v1 = (int)((float)(pos->y - m->CoordTop) * (1.0f / m->mscaler));
 
-	for (int i = 0; i < samples0; i++) {
+	float sizex = abs(k - k1);
+	float sizey = abs(v - v1);
+	float dist = (sqrt(pow(sizex, 2) + pow(sizey, 2)));
 
-		// drawing here!
+	if (dist > (m->drawSize/ m->a_resolution)) {
+		if (m->lastMouseX == -1) {
+			k = k1; v = v1;
+		}
+
+		int samples0;
+		POINT* k2 = sampleLine(m, k1, v1, k, v, &samples0);
+
 		int diameter = m->drawSize;
 		float radius = (float)diameter / 2.0f;
+		
+		float realOpacity = pow(m->a_opacity, 4);
 
-		for (int y = 0; y < diameter; y++) {
-			for (int x = 0; x < diameter; x++) {
-				float virtual_x = (float)x + 0.5f;
-				float virtual_y = (float)y + 0.5f;
-				double distance = sqrt(pow(virtual_x - radius, 2) + pow(virtual_y - radius, 2)); // pythagorean theorem AKA circle formula
-				if (distance > radius) { distance = radius; }
+		for (int i = 0; i < samples0; i++) {
+			for (int y = 0; y < diameter; y++) {
+				for (int x = 0; x < diameter; x++) {
+					float virtual_x = (float)x + 0.5f;
+					float virtual_y = (float)y + 0.5f;
+					double distance = sqrt(pow(virtual_x - radius, 2) + pow(virtual_y - radius, 2)); // Circle formula
 
-				uint32_t xloc = (virtual_x - (radius)) + (k2[i].x);
-				uint32_t yloc = (virtual_y - (radius)) + (k2[i].y);
-				//xloc += (rand() % m->a_frost) - m->a_frost / 2;
-				//yloc += (rand() % m->a_frost) - m->a_frost / 2;
-				if (xloc < m->imgwidth && yloc < m->imgheight && xloc >= 0 && yloc >= 0) {
-					// drawing
-					uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth, m->imgheight);
-					*memoryPath = lerp(*memoryPath, change_alpha(m->a_drawColor, 255), (1.0f-(distance / radius)) * m->a_opacity); // transparency
-					m->shouldSaveShutdown = true;
+					if (distance <= radius) { // Inside the circle's bounding box
+						uint32_t xloc = (virtual_x - radius) + (k2[i].x);
+						uint32_t yloc = (virtual_y - radius) + (k2[i].y);
+
+						if (xloc < m->imgwidth && yloc < m->imgheight) {
+							uint32_t* memoryPath = GetMemoryLocation(m->imgdata, xloc, yloc, m->imgwidth, m->imgheight);
+							uint32_t* memoryPathOriginal = GetMemoryLocation(m->imgoriginaldata, xloc, yloc, m->imgwidth, m->imgheight);
+							uint32_t actualDrawColor = m->a_drawColor;
+
+							if (GetKeyState(VK_CONTROL) & 0x8000 || (m->drawtype == 0)) {
+								actualDrawColor = *memoryPathOriginal;
+							}
+
+							if (GetKeyState(VK_CONTROL) & 0x8000 && GetKeyState(VK_SHIFT) & 0x8000) {
+								actualDrawColor = 0x00000000;
+							}
+
+							float alpha = (pow(distance / radius, 2)); // Smooth function for transparency based on distance
+							//alpha = (0.1f * alpha)+0.9f;
+							if (m->drawSize > 1.01f) {
+								float smoothening = 1.0f / (m->drawSize) * 5;
+								//alpha = 5.0f*(alpha - 0.8f);
+								if (!m->a_softmode) {
+									alpha = (smoothening + alpha - 1) / smoothening;
+									if (alpha < 0.001f) {
+										alpha = 0.001f;
+									}
+								}
+								
+								float radiusalpha = (1.0f - alpha) * realOpacity;
+
+								*memoryPath = lerp_gc(*memoryPath, actualDrawColor, radiusalpha);
+
+							}
+							else {
+								*memoryPath = lerp_gc(*memoryPath, actualDrawColor, realOpacity);
+							}
+							
+							//CircleGenerator(m->drawSize, xloc, yloc,1, 4, (uint32_t*)m->imgdata, m->a_drawColor, m->a_opacity, m->imgwidth, m->imgheight);
+							
+						}
+					}
 				}
-				
 			}
+
 		}
+		free(k2);
+
+		//Beep(500, 50);
+		m->lastMouseX = pos->x;
+		m->lastMouseY = pos->y;
+		m->shouldSaveShutdown = true;
 	}
 
-	free(k2);
-
-	m->lastMouseX = pos->x;
-	m->lastMouseY = pos->y;
 
 
-	RedrawSurface(m);
+	end = clock();
+	delta_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+
+	m->ms_time = delta_time;
+
+    RedrawSurface(m);
 }
 
 
 bool beforeas = false;
+
+
 
 void MouseMove(GlobalParams* m) {
 	ShowCursor(1);
@@ -462,51 +578,21 @@ void MouseMove(GlobalParams* m) {
 	bool as = false;
 	if (m->drawmode && isInImage && !isInMenu) {
 		cursor = LoadCursor(GetModuleHandle(0), MAKEINTRESOURCE(IDC_CURSOR1));
+		//cursor = CreateCircleCursor(m->drawSize*m->mscaler);
 		as = true;
 	}
+
+	if (m->eyedroppermode) {
+		cursor = LoadCursor(GetModuleHandle(0), MAKEINTRESOURCE(IDC_CURSOR2));
+	}
+
+
 	m->isAnnotationCircleShown = as;
 	if (beforeas != as) {
 		RedrawSurface(m);
 	}
 
-	/*
-#pragma region Cusor
-	if (m->drawmode && as) {
-		int redrawmargins = 20;
 
-		// first
-		int d = m->mscaler * m->drawSize;
-		int r = d / 2;
-
-		int locationx = -redrawmargins - (int)(r)+m->lastMoveX;
-		int locationy = -redrawmargins - (int)(r)+m->lastMoveY;
-		int sizex = d + redrawmargins * 2;
-		int sizey = d + redrawmargins * 2;
-		HRGN rgn = CreateRectRgn(locationx, locationy, locationx + sizex, locationy + sizey);
-		SelectClipRgn(m->hdc, rgn);
-		RedrawSurface(m);
-		SelectClipRgn(m->hdc, NULL);
-		DeleteObject(rgn);
-		// second
-		{
-
-			int d = m->mscaler * m->drawSize;
-			int r = d / 2;
-
-			int locationx = -redrawmargins - (int)(r)+pos.x;
-			int locationy = -redrawmargins - (int)(r)+pos.y;
-			int sizex = d + redrawmargins * 2;
-			int sizey = d + redrawmargins * 2;
-			HRGN rgn = CreateRectRgn(locationx, locationy, locationx + sizex, locationy + sizey);
-			SelectClipRgn(m->hdc, rgn);
-			RedrawSurface(m);
-			SelectClipRgn(m->hdc, NULL);
-			DeleteObject(rgn);
-		}
-	}
-
-#pragma endregion
-	*/
 	if (m->isMenuState) {
 		HRGN rgn = CreateRectRgn(m->menuX, m->menuY, m->menuX + m->menuSX, m->menuY + m->menuSY);
 		SelectClipRgn(m->hdc, rgn);
@@ -519,8 +605,6 @@ void MouseMove(GlobalParams* m) {
 
 	SetCursor(cursor);
 	ShowCursor(TRUE);
-	m->lastMoveX = pos.x;
-	m->lastMoveY = pos.y;
 	beforeas = as;
 
 	
@@ -528,20 +612,35 @@ void MouseMove(GlobalParams* m) {
 
 bool classUndo = true;
 void createUndoStep(GlobalParams* m) {
+
     uint32_t* thisImage = (uint32_t*)malloc(m->imgwidth * m->imgheight * 4);
     if (!thisImage) {
         MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK | MB_ICONERROR);
         exit(0);
     }
+
+	uint32_t* thisOImage = (uint32_t*)malloc(m->imgwidth * m->imgheight * 4);
+	if (!thisOImage) {
+		MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK | MB_ICONERROR);
+		exit(0);
+	}
+
     memcpy(thisImage, (uint32_t*)m->imgdata, m->imgwidth * m->imgheight * 4);
+	memcpy(thisOImage, (uint32_t*)m->imgoriginaldata, m->imgwidth * m->imgheight * 4);
+
 	for (int y = m->undoData.size(); y > m->undoStep; y--) {
-		uint32_t* last = m->undoData.back().image;
+		auto back = m->undoData.back();
+		uint32_t* last = back.image;
+		uint32_t* lasto = back.noannoimage;
 		free(last);
+		free(lasto);
 		m->undoData.pop_back();
 	}
+
 	m->undoStep++;
 	UndoDataStruct k;
 	k.image = thisImage;
+	k.noannoimage = thisOImage;
 	k.height = m->imgheight;
 	k.width = m->imgwidth;
     m->undoData.push_back(k);
@@ -554,10 +653,13 @@ void UndoBus(GlobalParams* m) {
         m->undoStep--;
         UndoDataStruct selection = m->undoData[m->undoStep];
 		free(m->imgdata);
+		free(m->imgoriginaldata);
 		m->imgdata = malloc(selection.width * selection.height * 4);
+		m->imgoriginaldata = malloc(selection.width * selection.height * 4);
 		m->imgwidth = selection.width;
 		m->imgheight = selection.height;
         memcpy(m->imgdata, selection.image, selection.width * selection.height * 4);
+		memcpy(m->imgoriginaldata, selection.noannoimage, selection.width * selection.height * 4);
     }
 	classUndo = false;
 }
@@ -569,10 +671,13 @@ void RedoBus(GlobalParams* m) {
 		m->undoStep++;
 		UndoDataStruct selection = m->undoData[m->undoStep];
 		free(m->imgdata);
+		free(m->imgoriginaldata);
 		m->imgdata = malloc(selection.width * selection.height * 4);
+		m->imgoriginaldata = malloc(selection.width * selection.height * 4);
 		m->imgwidth = selection.width;
 		m->imgheight = selection.height;
 		memcpy(m->imgdata, selection.image, selection.width * selection.height * 4);
+		memcpy(m->imgoriginaldata, selection.noannoimage, selection.width * selection.height * 4);
 	}
 	classUndo = false;
 }
@@ -598,7 +703,67 @@ void ToggleFullscreen(GlobalParams* m) {
 	}
 }
 
+void zoomcycle(GlobalParams* m, float factor) {
+	for (int i = 0; i < 10; i++) { // Use the "for" loop to recursively make more perfect to reduce rounding errors
+		float factor_s = factor / m->mscaler;
+		NewZoom(m, factor_s, true, false);
+		RedrawSurface(m);
+	}
+}
+
+/*
+void CheckKeys(GlobalParams* m, WPARAM wparam) {
+	// Check if the pressed key is W, A, S, or D
+	if (wparam == 'W' || wparam == 'A' || wparam == 'S' || wparam == 'D') {
+			LARGE_INTEGER frequency, previousTime, currentTime;
+			QueryPerformanceFrequency(&frequency);
+			QueryPerformanceCounter(&previousTime);
+
+			// Continuously check the key states as long as any of them are pressed
+			while (GetAsyncKeyState('W') & 0x8000 || GetAsyncKeyState('A') & 0x8000 || GetAsyncKeyState('S') & 0x8000 || GetAsyncKeyState('D') & 0x8000) {
+				MSG msg = { 0 };
+				while (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+					TranslateMessage(&msg);
+					DispatchMessage(&msg);
+				}
+
+				QueryPerformanceCounter(&currentTime);
+				double deltaTime = static_cast<double>(currentTime.QuadPart - previousTime.QuadPart) / frequency.QuadPart;
+				previousTime = currentTime;
+
+				HWND activeWindow = GetActiveWindow();
+				if (activeWindow == m->hwnd) {
+					// Check and update for each key individually
+					if (GetAsyncKeyState('W') & 0x8000) {
+						//Beep(800, 50);
+						m->iLocY += static_cast<int>(deltaTime * 1000);
+					}
+					if (GetAsyncKeyState('S') & 0x8000) {
+						//Beep(1600, 50);
+						m->iLocY -= static_cast<int>(deltaTime * 1000);
+					}
+					if (GetAsyncKeyState('A') & 0x8000) {
+						//Beep(400, 50);
+						m->iLocX += static_cast<int>(deltaTime * 1000);
+					}
+					if (GetAsyncKeyState('D') & 0x8000) {
+						//Beep(200, 50);
+						m->iLocX -= static_cast<int>(deltaTime * 1000);
+					}
+					RedrawSurface(m);
+				}
+			}
+		// Clear the message queue events
+		MSG msg;
+		while (PeekMessage(&msg, nullptr, WM_KEYDOWN, WM_KEYDOWN, PM_REMOVE)) {}
+	}
+
+}
+*/
+
+
 void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
+
 
 	if (m->halt) { return; }
 
@@ -610,9 +775,48 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		while (ShowCursor(FALSE) >= 0); // Hide idle cursor in fullscreen
 	}
 
+	if ((GetKeyState(VK_ESCAPE) & 0x8000)) {
+		m->eyedroppermode = false;
+		RedrawSurface(m);
+	}
+
+	if ((GetKeyState(VK_SHIFT) & 0x8000) && wparam == 'Z') { // Eyedropper
+		m->eyedroppermode = true;
+		RedrawSurface(m);
+	}
+
+	if (((GetKeyState(VK_CONTROL) & 0x8000) && (GetKeyState(VK_SHIFT) & 0x8000)) && wparam == 'D') {
+		m->debugmode = !m->debugmode;
+	}
+
+
+	// FOR KEYBOARD NAVIGATION
+	if (((GetKeyState(VK_CONTROL) & 0x8000) && (GetKeyState(VK_MENU) & 0x8000)) && (m->imgwidth >= 1)) { // ALSO FOUND IN REDRAW SURFACE TO DRAW TXT
+		RedrawSurface(m);
+		//Beep(1000, 400);
+		if (wparam >= '1' && wparam <= '9'){
+			PerformCasedBasedOperation(m, wparam - 0x31);
+		}
+		if (wparam == '0') {
+			PerformCasedBasedOperation(m, 9);
+		}
+		if (wparam == VK_OEM_MINUS) {
+			PerformCasedBasedOperation(m, 10);
+		}
+		return;
+	}
+
 	if (wparam == 'F') {
 		PrepareOpenImage(m);
 		RedrawSurface(m);
+	}
+
+	if (wparam == VK_OEM_PLUS) { // WHY? (the plus sign or equals sign)
+		NewZoom(m, 1.25f, 2, true);
+	}
+	if (wparam == VK_OEM_MINUS) { // WHY? (the minus sign or dash sign)
+		NewZoom(m, 0.8f, 2, true);
+
 	}
 
 	if (wparam == VK_F11) {
@@ -661,6 +865,9 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		RedoBus(m);
 		RedrawSurface(m);
 	}
+
+
+
 	/*
 	* // weird blur thing
 	if (wparam == 'H' && GetKeyState(VK_CONTROL) & 0x8000) {
@@ -677,6 +884,8 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		m->drawmode = !m->drawmode;
 		RedrawSurface(m);
 	}
+
+	//CheckKeys(m, wparam);
 
 	if (wparam == VK_LEFT) {
 		if (!m->loading && !m->halt && m->imgwidth>0) {
@@ -714,22 +923,18 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	}
 
 	if (wparam == '1') {
-		m->mscaler = 1.0f;
-		RedrawSurface(m);
+		zoomcycle(m, 1.0f);
 	}
 
 	if (wparam == '2') {
-		m->mscaler = 2.0f;
-		RedrawSurface(m);
+		zoomcycle(m, 2.0f);
 	}
 	if (wparam == '3') {
-		m->mscaler = 0.5f;
-		RedrawSurface(m);
+		zoomcycle(m, 0.5f);
 	}
 
 	if (wparam == '4') {
-		m->mscaler = 4.0f;
-		RedrawSurface(m);
+		zoomcycle(m, 4.0f);
 	}
 
 	if (wparam == '5') {
@@ -738,54 +943,109 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	}
 
 	if (wparam == '6') {
-		m->mscaler = 0.25f;
-		RedrawSurface(m);
+		zoomcycle(m, 0.25f);
 	}
 
 	if (wparam == '7') {
-		m->mscaler = 0.125f;
-		RedrawSurface(m);
+		zoomcycle(m, 0.125f);
 	}
 
 	if (wparam == '8') {
-		m->mscaler = 8.0f;
-		RedrawSurface(m);
+		//m->mscaler = 8.0f;
+		zoomcycle(m, 8.0f);
 	}
+
+	MouseMove(m);
 }
 
 void MouseUp(GlobalParams* m) {
+	POINT pos;
+	GetCursorPos(&pos);
+	ScreenToClient(m->hwnd, &pos);
+	if (m->eyedroppermode) {
+
+		uint32_t color = *GetMemoryLocation(m->scrdata, pos.x, pos.y, m->width, m->height);
+		m->a_drawColor = color;
+
+		m->eyedroppermode = false;
+		MouseMove(m);
+		RedrawSurface(m);
+
+		return;
+	}
+
 	m->isSize = false;
 	m->mouseDown = false;
 	m->toolmouseDown = false;
-	m->drawmousedown = false;
+	TurnOffDraw(m);
 
 	m->slider1mousedown = false;
 	m->slider2mousedown = false;
 	m->slider3mousedown = false;
 	m->slider4mousedown = false;
 
-	POINT pos;
-	GetCursorPos(&pos);
-	ScreenToClient(m->hwnd, &pos);
 
 	if (m->isMenuState) {
 		// menu logic
-		if (pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY)) {
+		if (pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY)) { // copied to if down
 
 			int selected = (pos.y - (m->menuY + 2)) / m->mH;
 			auto l = m->menuVector[selected].second;
 			l();
 			m->isMenuState = false;
-			RedrawSurface(m);
 			//Beep(selected *100, 100);
+		}
+	}
+	RedrawSurface(m);
+}
+
+void RightDown(GlobalParams* m) {
+	if (m->eyedroppermode) {
+		return;
+	}
+
+	m->lastMouseX = -1;
+	m->lastMouseY = -1;
+	POINT mPP;
+	GetCursorPos(&mPP);
+	ScreenToClient(m->hwnd, &mPP);
+
+	if (mPP.x > m->menuX && mPP.y > m->menuY && mPP.x < (m->menuX + m->menuSX) && mPP.y < (m->menuY + m->menuSY) && m->isMenuState) { // check if the mouse is over a menu
+		return;
+	}
+
+	CloseToolbarWhenInactive(m, mPP);
+
+	if (m->drawmode) {
+		if ((mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom)) {// NOW, im putting it in the right click menu up thing to not rendeeer menu ACTUALLLY its right down below
+			m->drawtype = 0;
+			TurnOnDraw(m);
+			createUndoStep(m);
 		}
 	}
 }
 
 void RightUp(GlobalParams* m) {
+	if (m->eyedroppermode) {
+		return;
+	}
+	bool isdraw = m->drawmousedown;
+	TurnOffDraw(m);
 	POINT pos;
 	GetCursorPos(&pos);
 	ScreenToClient(m->hwnd, &pos);
+	if (isdraw) {
+		return;
+	}
+	if (pos.y < m->toolheight) {
+		return;
+	}
+	if (m->drawmode) {
+		if (pos.y > m->toolheight && pos.x >= m->CoordLeft && pos.y > m->CoordTop && pos.x < m->CoordRight && pos.y < m->CoordBottom) {// :)
+			return;
+		}
+	}
+
 		m->menuVector = {
 
 			{"Blank Image{s}",
@@ -797,7 +1057,7 @@ void RightUp(GlobalParams* m) {
 				},
 			},
 
-			{"Toggle Smoothing{s}",
+			{"Toggle Anti-alliasing{s}",
 				[m]() -> bool {
 					m->smoothing = !m->smoothing;
 					return true;
@@ -864,12 +1124,56 @@ void Size(GlobalParams* m) {
 }
 
 void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
-	
-
-
 
 	if (m->imgwidth < 1) return;
 	float zDelta = (float)GET_WHEEL_DELTA_WPARAM(wparam) / WHEEL_DELTA;
+
+	POINT mPP;
+	GetCursorPos(&mPP);
+	ScreenToClient(m->hwnd, &mPP);
+
+
+	int slider1begin = m->drawMenuOffsetX + m->slider1begin;
+	int slider1end = m->drawMenuOffsetX + m->slider1end;
+
+	int slider2begin = m->drawMenuOffsetX + m->slider2begin;
+	int slider2end = m->drawMenuOffsetX + m->slider2end;
+
+	int sliderYb = m->drawMenuOffsetY;
+	int sliderYe = m->drawMenuOffsetY + 40; // PLEASE STOP COPYING THINGS AROUND AND MAKE A FUNCTION!! nah ill do it later
+	if (m->drawmode) {
+		if ((mPP.x > slider1begin && mPP.x < slider1end) && (mPP.y > sliderYb && mPP.y < sliderYe)) { // these are also found in the scroll USE CONTROL F
+			if (zDelta > 0) {
+				m->drawSize += 1.0f;
+				m->drawSize *= 1.3f;
+			}
+			else {
+				m->drawSize -= 1.0f;
+				m->drawSize *= 0.76f;
+			}
+			if (m->drawSize < 1) { m->drawSize = 1; }
+			if (m->drawSize > 100.0f) { m->drawSize = 100.0f; }
+			RedrawSurface(m);
+			return;
+		}
+
+		if ((mPP.x > slider2begin && mPP.x < slider2end) && (mPP.y > sliderYb && mPP.y < sliderYe)) {
+			if (zDelta > 0) {
+				m->a_opacity += 0.1f;
+			}
+			else {
+				m->a_opacity -= 0.1f;
+			}
+			if (m->a_opacity < 0.01f) { m->a_opacity = 0.01f; }
+			if (m->a_opacity > 1.0f) { m->a_opacity = 1.0f; }
+			RedrawSurface(m);
+			return;
+		}
+	}
+	
+	// CONTROL F!
+
+
 
 	float v = 1;
 
@@ -885,7 +1189,7 @@ void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		RedrawSurface(m);
 	}
 	else {
-		NewZoom(m, v, true);
+		NewZoom(m, v, true, true);
 	}
 
 }

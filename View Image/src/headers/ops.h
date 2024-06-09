@@ -5,7 +5,6 @@
 #include "globalvar.h"
 #include <Windows.h>
 #include "rendering.h"
-#include <VersionHelpers.h>
 #include "events.h"
 #include "../stb_image.h"
 #include "../stb_image_write.h"
@@ -46,11 +45,16 @@ void no_offset(GlobalParams* m);
 
 void autozoom(GlobalParams* m);
 
+uint8_t getAlpha(uint32_t color);
 
-void NewZoom(GlobalParams* m, float v, int mouse);
+void NewZoom(GlobalParams* m, float v, int mouse, bool shouldRoundZoom);
 
-uint32_t InvertColorChannels(uint32_t d, bool should);
+uint32_t InvertCC(uint32_t d, bool should);
+void InvertAllColorChannels(uint32_t* buffer, int w, int h);
+
 uint32_t lerp(uint32_t color1, uint32_t color2, float alpha);
+uint8_t lerpLinear(uint8_t a, uint8_t b, float t);
+uint32_t lerp_gc(uint32_t color1, uint32_t color2, float alpha);
 
 void ResizeImageToSize(GlobalParams* m, int width, int height);
 
@@ -68,3 +72,9 @@ void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels);
 void gaussianBlurFFT(uint32_t* image, int height, int width, int kernelSize, double* kernel);
 
 uint32_t multiplyColor(uint32_t color, float multiplier);
+
+
+bool CopyImageToClipboard(GlobalParams* m, void* imageData, int width, int height);
+
+uint32_t change_alpha(uint32_t color, uint8_t new_alpha);
+void overlayBuffers(const uint32_t* background, const uint32_t* foreground, uint32_t* output, float opacity, size_t bufferSize);

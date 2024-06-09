@@ -16,9 +16,9 @@ bool CheckIfStandardFile(const char* filepath) {
 void* GetStandardBitmap(GlobalParams* m, const char* standardPath, int* w, int* h) {
 	void* id;
 	// im really sorry to say that channels varriable, you don't really matter
-	// unlike the image width and image height, you just get reallocated automatically
+	// unlike the image width and image height, you just get deallocated automatically
 	// by the stack once this function reaches the end of its scope
-	// i know you are just an int, but im sorry you are not just neccissary for the
+	// i know you are just an int, but im sorry you are not a necessity for the
 	// rest of the program
 	int channels;
 
@@ -34,6 +34,9 @@ void* GetStandardBitmap(GlobalParams* m, const char* standardPath, int* w, int* 
 		MessageBox(m->hwnd, "Failed to load because the provided file path is not in standard format", "Failed to load", MB_OK | MB_ICONERROR);
 		return 0;
 	}
+	ConvertToPremultipliedAlpha((uint32_t*)id, *w, *h);
+	InvertAllColorChannels((uint32_t*)id, *w, *h);
+
 	return id;
 }
 
@@ -157,7 +160,9 @@ void PrepareSaveImage(GlobalParams* m) {
 		m->loading = true;
 		RedrawSurface(m);
 		//CombineBuffer(m, (uint32_t*)m->imgdata, (uint32_t*)m->imgannotate, m->imgwidth, m->imgheight, true);
+		InvertAllColorChannels((uint32_t*)m->imgdata, m->imgwidth, m->imgheight);
 		stbi_write_png(res.c_str(), m->imgwidth, m->imgheight, 4, m->imgdata, 0);
+		InvertAllColorChannels((uint32_t*)m->imgdata, m->imgwidth, m->imgheight);
 		//FreeCombineBuffer(m);
 		m->loading = false;
 		m->shouldSaveShutdown = false;
@@ -186,10 +191,15 @@ bool doIFSave(GlobalParams* m) {
 }
 
 bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
+	if (!doIFSave(m)) {
+		m->loading = false;
+		return false;
+	}
+	// remember when I drew with the small brush and when I clicked blank it cleared the undo. yeah, the order, I switched it
 	m->undoData.clear();
 	m->undoStep = 0;
 	m->drawmode = false;
-	m->drawmousedown = false;
+	TurnOffDraw(m);
 
 	clear_kvector();
 
@@ -197,35 +207,38 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 	RedrawSurface(m);
 	//Sleep(430);
 
-	if (!doIFSave(m)) {
-		m->loading = false;
-		return false;
-	}
-
 	m->fpath = "Untitled";
 
 	if (m->imgdata) {
 		free(m->imgdata);
+	}
+	if (m->imgoriginaldata) {
+		free(m->imgoriginaldata);
 	}
 	//if (m->imgannotate) {
 	//	free(m->imgannotate);
 	//}
 	// put thing here
 
-	m->imgwidth = 1;
-	m->imgheight = 1;
-	m->imgdata = malloc(4);
-	*((uint32_t*)m->imgdata) = color;
+	m->imgwidth = 4;
+	m->imgheight = 4;
+	m->imgdata = malloc(4*4*4);
+	m->imgoriginaldata = malloc(4*4*4);
+	for (int y = 0; y < 4; y++) {
+		for (int x = 0; x < 4; x++) {
+			*GetMemoryLocation(m->imgdata, x, y, 4, 4) = color;
+			*GetMemoryLocation(m->imgoriginaldata, x, y, 4, 4) = color;
+		}
+	}
 	
 
-	if (!m->imgdata) {
-		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK | MB_ICONERROR);
+	if (!m->imgdata || !m->imgoriginaldata) {
+		MessageBox(m->hwnd, "Error Loading Image: Big memory error", "Big Error", MB_OK | MB_ICONERROR);
 		if (m->imgdata) {
 			free(m->imgdata);
 		}
 		m->imgwidth = 0;
 		m->imgheight = 0;
-
 	}
 
 	//m->imgannotate = malloc(m->imgwidth * m->imgheight * 4);
@@ -234,7 +247,6 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 
 	// Auto-zoom
 	autozoom(m);
-	m->smoothing = ((m->imgwidth * m->imgheight) > 625);
 	m->shouldSaveShutdown = false;
 
 	m->loading = false;
@@ -247,7 +259,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	m->undoData.clear();
 	m->undoStep = 0;
 	m->drawmode = false;
-	m->drawmousedown = false;
+	TurnOffDraw(m);
 
 	if (!isLeftRight) {
 		clear_kvector();
@@ -267,6 +279,9 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	if (m->imgdata) {
 		free(m->imgdata);
 	}
+	if (m->imgoriginaldata) {
+		free(m->imgoriginaldata);
+	}
 	//if (m->imgannotate) {
 	//	free(m->imgannotate);
 	//}
@@ -274,13 +289,13 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 
 	if (CheckIfStandardFile(kpath.c_str())) {
 		m->imgdata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
-		
+		m->imgoriginaldata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
 	}
 	else {
 		// no
 	}
 
-	if (!m->imgdata) {
+	if (!m->imgdata || !m->imgoriginaldata) {
 		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK | MB_ICONERROR);
 		if (m->imgdata) {
 			free(m->imgdata);

@@ -6,11 +6,18 @@
 
 struct UndoDataStruct {
 	uint32_t* image;
+	uint32_t* noannoimage;
 	int width;
 	int height;
 };
 
+#define REAL_BIG_VERSION_BOOLEAN "2.4Dv"
+
 struct GlobalParams {
+
+	// deltatime
+	float ms_time = 0;
+
 	bool fontinit = false;
 	// the global window
 	HWND hwnd;
@@ -18,6 +25,7 @@ struct GlobalParams {
 
 	// memory
 	void* imgdata;
+	void* imgoriginaldata;
 	void* scrdata;
 	void* toolbar_gaussian_data;
 	// images
@@ -45,8 +53,8 @@ struct GlobalParams {
 	int channelos;
 
 	// settings
-	int maxButtons = 11;
-	const int iconSize = 30;
+	int maxButtons = 12;
+	const int iconSize = 30; // the real width is 31 because 1 px divider
 	int toolheight = 43;
 
 	// current state
@@ -60,6 +68,7 @@ struct GlobalParams {
 	bool mouseDown = false;
 	bool toolmouseDown = false;
 	bool drawmousedown = false;
+	int drawtype = 1; // 1 for draw: 0 for erase (override by control)
 
 	int selectedbutton = -1;
 
@@ -81,8 +90,6 @@ struct GlobalParams {
 		int lastMouseX;
 		int lastMouseY;
 
-		int lastMoveX;
-		int lastMoveY;
 
 	bool fullscreen = false;
 	WINDOWPLACEMENT wpPrev;
@@ -105,15 +112,22 @@ struct GlobalParams {
 
 	bool smoothing = true;
 
+	std::string fontsfolder;
+
 	std::vector<std::pair<std::string, std::function<bool()>>> menuVector;
 
 	// drawing/annotating
 
+	
 	bool drawmode = false;
-	uint32_t a_drawColor = 0x0202CC;
+
+	bool eyedroppermode = false;
+
+	bool a_softmode = false;
+	uint32_t a_drawColor = 0xFFCC0000f;
 	float drawSize = 20;
-	int a_frost = 1;
 	float a_opacity = 1.0f;
+	float a_resolution = 30.0f;
 
 	bool isAnnotationCircleShown = false;
 
@@ -133,6 +147,11 @@ struct GlobalParams {
 	bool slider4mousedown = false;
 
 	float testfloat = 0.0f;
+
+	bool debugmode = false;
+
+	bool sleepmode = false;
+
 };
 
 
