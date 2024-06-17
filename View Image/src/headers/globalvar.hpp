@@ -11,7 +11,7 @@ struct UndoDataStruct {
 	int height;
 };
 
-#define REAL_BIG_VERSION_BOOLEAN "2.4Dv"
+#define REAL_BIG_VERSION_BOOLEAN "2.4"
 
 struct GlobalParams {
 
@@ -88,7 +88,7 @@ struct GlobalParams {
 		POINT LockmPos;
 		bool isSize;
 		int lastMouseX;
-		int lastMouseY;
+		int lastMouseY; // for drawing only
 
 
 	bool fullscreen = false;
@@ -102,6 +102,10 @@ struct GlobalParams {
 
 	int menuY = toolheight+5;
 	int menuX = 0;
+
+	int actmenuY = 0;
+	int actmenuX = 0;
+
 	int menuSX = 0;
 	int menuSY = 0;
 	int mH = 25;
@@ -152,6 +156,9 @@ struct GlobalParams {
 
 	bool sleepmode = false;
 
+	int mouseRightInitialCheckX;
+	int mouseRightInitialCheckY;
+	
 };
 
 

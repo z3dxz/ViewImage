@@ -33,39 +33,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 // Note: Although the code is C++, the code is mostly in C style. Object oriented programming is not apparent and "classes" are just
 // structs being passed through arguments
 
-/*
-
-	DWORD currentTime = timeGetTime();
-	DWORD deltaTime = currentTime - previousTime;
-	previousTime = timeGetTime();
-
-	HWND temp = GetActiveWindow();
-	if (temp == gp.hwnd) {
-
-		bool isW = GetKeyState('W') & 0x8000;
-		bool isA = GetKeyState('A') & 0x8000;
-		bool isS = GetKeyState('S') & 0x8000;
-		bool isD = GetKeyState('D') & 0x8000;
-
-
-		if (isW) {
-			gp.iLocY += deltaTime;
-		}
-		if (isA) {
-			gp.iLocX += deltaTime;
-		}
-		if (isS) {
-			gp.iLocY -= deltaTime;
-		}
-		if (isD) {
-			gp.iLocX -= deltaTime;
-		}
-		if (isW || isA || isS || isD) {
-
-			RedrawSurface(&gp);
-		}
-	}
-*/
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
 
@@ -114,11 +81,39 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		return 0;
 	}
 
-	
-	bool running = true;
-	static DWORD previousTime;
-	while (running) {
+	// WASD Replaced with TIMER! Look under WNDPROC Below
+	SetTimer(gp.hwnd, 1, 15, NULL);
 
+	MSG msg{};
+	while (GetMessage(&msg, 0, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+	return 0;
+}
+
+
+
+
+static DWORD previousTime;
+
+float momentiumX= 0;
+float momentiumY = 0;
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+
+
+	switch (msg) {
+	case WM_CREATE: {
+
+
+		BOOL enable = TRUE;
+		DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
+
+		break;
+	}
+	case WM_TIMER: {
+		/*
 		DWORD currentTime = timeGetTime();
 		DWORD deltaTime = currentTime - previousTime;
 		previousTime = timeGetTime();
@@ -148,34 +143,51 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 				RedrawSurface(&gp);
 			}
 		}
+		
+		*/
 
 
-		MSG msg = { 0 };
-		while (PeekMessage(&msg, NULL, NULL, NULL, PM_REMOVE)) {
-			if (msg.message == WM_QUIT) { running = false; }
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
+		DWORD currentTime = timeGetTime();
+		DWORD deltaTime = currentTime - previousTime;
+		previousTime = timeGetTime();
+
+		HWND temp = GetActiveWindow();
+		if (temp == gp.hwnd) {
+
+			bool isW = GetKeyState('W') & 0x8000;
+			bool isA = GetKeyState('A') & 0x8000;
+			bool isS = GetKeyState('S') & 0x8000;
+			bool isD = GetKeyState('D') & 0x8000;
+
+
+			if (isW) {
+				momentiumY += 0.1f;
+			}
+			if (isA) {
+				momentiumX += 0.1f;
+			}
+			if (isS) {
+				momentiumY -= 0.1f;
+			}
+			if (isD) {
+				momentiumX -= 0.1f;
+			}
+			momentiumX *= 0.9f;
+			momentiumY *= 0.9f;
+
+			if (momentiumX > 1.0f) { momentiumX = 1.0f; }
+			if (momentiumY > 1.0f) { momentiumY = 1.0f; }
+
+			if (abs(momentiumX) > 0.01f || abs(momentiumY)>0.01f) {
+				gp.iLocY += deltaTime * momentiumY;
+				gp.iLocX += deltaTime * momentiumX;
+				RedrawSurface(&gp);
+			}
+			
+
+			if (isW || isA || isS || isD) {
+			}
 		}
-
-	}
-
-
-	return 0;
-}
-
-
-bool keydownprotocol = false;
-
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-
-
-	switch (msg) {
-	case WM_CREATE: {
-
-
-		BOOL enable = TRUE;
-		DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
-
 		break;
 	}
 	case WM_GETMINMAXINFO:
@@ -219,11 +231,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 
 	case WM_KEYDOWN: {
-		bool is = keydownprotocol;
-		if (!is) {
-			KeyDown(&gp, wparam, lparam);
-		}
-		keydownprotocol = true;
+		KeyDown(&gp, wparam, lparam);
 		break;
 	}
 
@@ -233,7 +241,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 		break;
 	}
 	case WM_KEYUP: {
-		keydownprotocol = false;
 		RedrawSurface(&gp);
 		break;
 	}
@@ -268,12 +275,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	}
 	case WM_SETFOCUS: {
 		gp.sleepmode = false;
-		Beep(2000, 20);
 		break;
 	}
 	case WM_KILLFOCUS: {
 		gp.sleepmode = true;
-		Beep(500, 20);
 		for (int i = 0; i < 50; i++) {
 			ShowCursor(500);
 		}

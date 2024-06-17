@@ -163,7 +163,9 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
 	case 10: {
 
 		// copy
-		CopyImageToClipboard(m, m->imgdata, m->imgwidth, m->imgheight);
+		if (!CopyImageToClipboard(m, m->imgdata, m->imgwidth, m->imgheight)) {
+			MessageBox(m->hwnd, "Error copying the image to the clipboard", "Bug Detected!", MB_OK | MB_ICONERROR);
+		}
 
 		return 0;
 	}
@@ -188,7 +190,7 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
 }
 
 void CloseToolbarWhenInactive(GlobalParams* m, POINT& k) {
-	if (k.x > m->menuX && k.y > m->menuY && k.x < (m->menuX + m->menuSX) && k.y < (m->menuY + m->menuSY)) {
+	if (k.x > m->actmenuX && k.y > m->actmenuY && k.x < (m->actmenuX + m->menuSX) && k.y < (m->actmenuY + m->menuSY)) {
 
 	}
 	else {
@@ -212,7 +214,7 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		//return 1;
 	}
 
-	if ((mPP.x > m->menuX && mPP.y > m->menuY && mPP.x < (m->menuX + m->menuSX) && mPP.y < (m->menuY + m->menuSY))&&m->isMenuState) { // check if the mouse is over a menu. ALSO COPIED TO RIGHT MOUSE DOWN
+	if ((mPP.x > m->actmenuX && mPP.y > m->actmenuY && mPP.x < (m->actmenuX + m->menuSX) && mPP.y < (m->actmenuY + m->menuSY))&&m->isMenuState) { // check if the mouse is over a menu. ALSO COPIED TO RIGHT MOUSE DOWN
 		return 1;
 	}
 
@@ -572,7 +574,7 @@ void MouseMove(GlobalParams* m) {
 
 	
 	HCURSOR cursor = LoadCursor(NULL, IDC_ARROW);
-	bool isInMenu = ((pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY))) && m->isMenuState;
+	bool isInMenu = ((pos.x > m->actmenuX && pos.y > m->actmenuY && pos.x < (m->actmenuX + m->menuSX) && pos.y < (m->actmenuY + m->menuSY))) && m->isMenuState;
 	bool isInImage = pos.y > m->toolheight && pos.x >= m->CoordLeft && pos.y >= m->CoordTop && pos.x < m->CoordRight && pos.y < m->CoordBottom;
 
 	bool as = false;
@@ -594,7 +596,7 @@ void MouseMove(GlobalParams* m) {
 
 
 	if (m->isMenuState) {
-		HRGN rgn = CreateRectRgn(m->menuX, m->menuY, m->menuX + m->menuSX, m->menuY + m->menuSY);
+		HRGN rgn = CreateRectRgn(m->actmenuX, m->actmenuY, m->actmenuX + m->menuSX, m->actmenuY + m->menuSY);
 		SelectClipRgn(m->hdc, rgn);
 		RedrawSurface(m);
 		SelectClipRgn(m->hdc, NULL);
@@ -711,6 +713,7 @@ void zoomcycle(GlobalParams* m, float factor) {
 	}
 }
 
+// This was a really stupid idea
 /*
 void CheckKeys(GlobalParams* m, WPARAM wparam) {
 	// Check if the pressed key is W, A, S, or D
@@ -842,6 +845,23 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		// undo
 		UndoBus(m);
 		RedrawSurface(m);
+	}
+
+	if(wparam == 'C' && GetKeyState(VK_CONTROL) & 0x8000) {
+		// copy
+		if (!CopyImageToClipboard(m, m->imgdata, m->imgwidth, m->imgheight)) {
+			MessageBox(m->hwnd, "Error copying the image to the clipboard. You used control+c.", "Bug Detected!", MB_OK | MB_ICONERROR);
+		}
+	}
+
+	if (wparam == 'V' && GetKeyState(VK_CONTROL) & 0x8000) {
+		// paste NEXT VER 2.5 COMING UP
+		/*
+		
+		if (!PasteImageFromClipboard(m)) {
+			MessageBox(m->hwnd, "Error pasting the image from the clipboard. You used control+v.", "Bug Detected!", MB_OK | MB_ICONERROR);
+		}
+		*/
 	}
 
 	if (wparam == 'S' && GetKeyState(VK_CONTROL) & 0x8000) {
@@ -987,9 +1007,9 @@ void MouseUp(GlobalParams* m) {
 
 	if (m->isMenuState) {
 		// menu logic
-		if (pos.x > m->menuX && pos.y > m->menuY && pos.x < (m->menuX + m->menuSX) && pos.y < (m->menuY + m->menuSY)) { // copied to if down
+		if (pos.x > m->actmenuX && pos.y > m->actmenuY && pos.x < (m->actmenuX + m->menuSX) && pos.y < (m->actmenuY + m->menuSY)) { // copied to if down
 
-			int selected = (pos.y - (m->menuY + 2)) / m->mH;
+			int selected = (pos.y - (m->actmenuY + 2)) / m->mH;
 			auto l = m->menuVector[selected].second;
 			l();
 			m->isMenuState = false;
@@ -1010,7 +1030,10 @@ void RightDown(GlobalParams* m) {
 	GetCursorPos(&mPP);
 	ScreenToClient(m->hwnd, &mPP);
 
-	if (mPP.x > m->menuX && mPP.y > m->menuY && mPP.x < (m->menuX + m->menuSX) && mPP.y < (m->menuY + m->menuSY) && m->isMenuState) { // check if the mouse is over a menu
+	m->mouseRightInitialCheckX = mPP.x;
+	m->mouseRightInitialCheckY = mPP.y;
+
+	if (mPP.x > m->actmenuX && mPP.y > m->actmenuY && mPP.x < (m->actmenuX + m->menuSX) && mPP.y < (m->actmenuY + m->menuSY) && m->isMenuState) { // check if the mouse is over a menu
 		return;
 	}
 
@@ -1041,58 +1064,59 @@ void RightUp(GlobalParams* m) {
 		return;
 	}
 	if (m->drawmode) {
-		if (pos.y > m->toolheight && pos.x >= m->CoordLeft && pos.y > m->CoordTop && pos.x < m->CoordRight && pos.y < m->CoordBottom) {// :)
+		if (pos.y > m->toolheight && pos.x >= m->CoordLeft && pos.y > m->CoordTop && pos.x < m->CoordRight && pos.y < m->CoordBottom) {// :) i should really just create a function already
 			return;
 		}
 	}
 
-		m->menuVector = {
+	m->menuVector = {
 
-			{"Blank Image{s}",
-				[m]() -> bool {
-					if (AllocateBlankImage(m, 0xFFFFFFFF)) {
-						ShowResizeDialog(m);
-					}
-					return true;
-				},
-			},
-
-			{"Toggle Anti-alliasing{s}",
-				[m]() -> bool {
-					m->smoothing = !m->smoothing;
-					return true;
-				},
-			},
-
-			{"Undo (CTRL+Z)",
-				[m]() -> bool {
-					UndoBus(m);
-					return true;
-				},
-			},
-
-			{"Redo (CTRL+Y){s}",
-				[m]() -> bool {
-					RedoBus(m);
-					return true;
-				},
-			},
-
-			{"Resize Image [CTRL+R]",
-				[m]() -> bool {
+		{"Blank Image{s}",
+			[m]() -> bool {
+				if (AllocateBlankImage(m, 0xFFFFFFFF)) {
 					ShowResizeDialog(m);
-					//ResizeImageToSize(m);
-					return true;
-				},
+				}
+				return true;
 			},
-		
-		};
-		m->menuX = (pos.x > (m->width-m->menuSX)) ? (m->width - m->menuSX) : pos.x;
-		m->menuY = (pos.y > (m->height - m->menuSY)) ? (m->height - m->menuSY) : pos.y;
-		m->isMenuState = true;
+		},
 
-		RedrawSurface(m);
-		//SelectClipRgn(m->hdc, NULL);
+		{"Toggle Anti-alliasing{s}",
+			[m]() -> bool {
+				m->smoothing = !m->smoothing;
+				return true;
+			},
+		},
+
+		{"Undo (CTRL+Z)",
+			[m]() -> bool {
+				UndoBus(m);
+				return true;
+			},
+		},
+
+		{"Redo (CTRL+Y){s}",
+			[m]() -> bool {
+				RedoBus(m);
+				return true;
+			},
+		},
+
+		{"Resize Image [CTRL+R]",
+			[m]() -> bool {
+				ShowResizeDialog(m);
+				//ResizeImageToSize(m);
+				return true;
+			},
+		},
+		
+	};
+
+	m->menuX = pos.x;
+	m->menuY = pos.y;
+	m->isMenuState = true;
+
+	RedrawSurface(m);
+	//SelectClipRgn(m->hdc, NULL);
 }
 
 void Size(GlobalParams* m) {

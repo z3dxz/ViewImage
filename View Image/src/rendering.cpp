@@ -10,6 +10,7 @@
 
 // Freetype Globals
 FT_Library ft;
+
 FT_Face face;
 
 
@@ -127,6 +128,7 @@ const char* strtable[] {
 	"Information"
 };
 
+
 int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
 	if (!m->fontinit) {
 		return 0;
@@ -136,6 +138,10 @@ int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t l
 
 	FT_GlyphSlot g = face->glyph;
 	int penX = 0;
+	int spacing = 0; // Variable to track spacing between characters
+
+	// Calculate the base Y-position using ascender value
+	int baseY = locY + (face->size->metrics.ascender >> 6);
 
 	for (const char* p = text; *p; ++p) {
 		if (FT_Load_Char(face, *p, FT_LOAD_RENDER))
@@ -160,7 +166,7 @@ int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t l
 				int pixelIndex = (y)*m->width + (penX + x);
 				unsigned char pixelValue = bitmap->buffer[y * bitmap->width + x];
 				uint32_t ptx = locX + penX + x;
-				uint32_t pty = locY + (face->size->metrics.ascender >> 6) - (bitmap->rows - y) + maxDescender;
+				uint32_t pty = baseY - (bitmap->rows - y) + maxDescender; // Adjusted Y-position calculation
 
 				uint32_t* memoryPath = GetMemoryLocation(mem, ptx, pty, m->width, m->height);
 				uint32_t existingColor = *memoryPath;
@@ -171,11 +177,14 @@ int PlaceString(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t l
 
 		// Calculate actual character width
 		int characterWidth = (g->metrics.horiAdvance >> 6) - (g->metrics.horiBearingX >> 6);
-		penX += characterWidth;
+
+		// Update penX position with character width and spacing
+		penX += characterWidth + spacing;
 	}
 
 	return 1;
 }
+
 
 int PlaceString_old_legacy(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
 
@@ -581,7 +590,7 @@ void RenderToolbar(GlobalParams* m) {
 		}
 
 		// version
-		PlaceNewFont(m, REAL_BIG_VERSION_BOOLEAN, m->width - 70, 16, "OCRAEXT.TTF", 13, 0x808080);
+		PlaceNewFont(m, REAL_BIG_VERSION_BOOLEAN, m->width - 60, 16, "OCRAEXT.TTF", 13, 0x808080);
 
 		
 		
@@ -601,16 +610,20 @@ void ResetCoordinates(GlobalParams* m) {
 }
 
 void DrawMenu(GlobalParams* m) {
-	int mH = m->mH;
 
+	int mH = m->mH;
 	int miX = 150;
 	int miY = (m->menuVector.size() * mH) + m->menuVector.size();
 
 	m->menuSX = miX;
 	m->menuSY = miY - 2; // FIX-Crash when on border
 
-	int posX = m->menuX;
-	int posY = m->menuY;
+	int posX = (m->menuX > (m->width - m->menuSX)) ? (m->width - m->menuSX) : m->menuX;
+	int posY = (m->menuY > (m->height - m->menuSY)) ? (m->height - m->menuSY) : m->menuY;
+
+
+	m->actmenuX = posX;
+	m->actmenuY = posY;
 
 	gaussian_blur((uint32_t*)m->scrdata, miX-4, miY-4, 4.0f, m->width, m->height, posX+2, posY+2);
 	dDrawFilledRectangle(m->scrdata, m->width, m->height, posX, posY, miX, miY, 0x000000, 0.6f);
@@ -623,7 +636,7 @@ void DrawMenu(GlobalParams* m) {
 
 	int selected = (mp.y-(posY+2))/mH;
 
-	if (mp.x > m->menuX && mp.y > m->menuY && mp.x < (m->menuX + m->menuSX) && mp.y < (m->menuY + m->menuSY)) {
+	if (mp.x > m->actmenuX && mp.y > m->actmenuY && mp.x < (m->actmenuX + m->menuSX) && mp.y < (m->actmenuY + m->menuSY)) {
 		dDrawRoundedFilledRectangle(m->scrdata, m->width, m->height, posX + 4, posY + 4 + ((mH)*selected), miX - 8, mH - 3, 0xFF8080, 0.1f);
 	}
 
@@ -798,7 +811,9 @@ void DrawDrawModeMenu(GlobalParams* m){
 
 }
 
+BITMAPINFO bmi;
 void RedrawSurface(GlobalParams* m) {
+	
 	if (m->sleepmode) {
 		return;
 	}
@@ -816,6 +831,7 @@ void RedrawSurface(GlobalParams* m) {
 	// render the background
 	if (paintBG) {
 		RenderBK(m);
+		
 	}
 
 	// render the image
@@ -958,9 +974,14 @@ void RedrawSurface(GlobalParams* m) {
 	// Update window title
 	
 	
+	std::string aststring = "";
+	if (m->shouldSaveShutdown) {
+		aststring = "*";
+	}
+
 	char str[256];
 	if (!m->fpath.empty()) {
-		sprintf(str, "View Image | %s | %d\%%", m->fpath.c_str(), (int)(m->mscaler * 100.0f));
+		sprintf(str, "View Image | %s%s | %d\%%", m->fpath.c_str(), aststring.c_str(), (int)(m->mscaler * 100.0f));
 	}
 	else {
 
@@ -968,7 +989,6 @@ void RedrawSurface(GlobalParams* m) {
 	}
 	SetWindowText(m->hwnd, str);
 
-	BITMAPINFO bmi;
 	bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
 	bmi.bmiHeader.biWidth = m->width;
 	bmi.bmiHeader.biHeight = -(int64_t)m->height;

@@ -1,13 +1,12 @@
 #pragma once
 #include <iostream>
 #include <algorithm>
-#include "../gaussian_blur_template.hpp"
 #include "globalvar.hpp"
 #include <Windows.h>
 #include "rendering.hpp"
 #include "events.hpp"
-#include "../stb_image.hpp"
-#include "../stb_image_write.hpp"
+#include "../stb_image.h"
+#include "../stb_image_write.h"
 
 
 #pragma region Memory
@@ -75,6 +74,7 @@ uint32_t multiplyColor(uint32_t color, float multiplier);
 
 
 bool CopyImageToClipboard(GlobalParams* m, void* imageData, int width, int height);
+bool PasteImageFromClipboard(GlobalParams* m);
 
 uint32_t change_alpha(uint32_t color, uint8_t new_alpha);
 void overlayBuffers(const uint32_t* background, const uint32_t* foreground, uint32_t* output, float opacity, size_t bufferSize);

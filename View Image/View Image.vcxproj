@@ -166,14 +166,12 @@
     <ClCompile Include="src\ops.cpp" />
     <ClCompile Include="src\rendering.cpp" />
     <ClCompile Include="src\starter.cpp" />
-    <ClCompile Include="src\toolbar_engine.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="resource.h" />
+    <ClInclude Include="resource.hpp" />
     <ClInclude Include="src\gaussian_blur_template.h" />
     <ClInclude Include="src\headers\dialogcontrol.hpp" />
     <ClInclude Include="src\headers\events.hpp" />
-    <ClInclude Include="src\font.h" />
     <ClInclude Include="src\headers\leftrightlogic.hpp" />
     <ClInclude Include="src\headers\ops.hpp" />
     <ClInclude Include="src\headers\globalvar.hpp" />

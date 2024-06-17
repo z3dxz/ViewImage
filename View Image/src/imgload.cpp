@@ -1,8 +1,8 @@
 #include "headers/imgload.hpp"
 #include "headers/globalvar.hpp"
-#include "stb_image.hpp"
+#include "stb_image.h"
 #include "headers/leftrightlogic.hpp"
-#include "stb_image_write.hpp"
+#include "stb_image_write.h"
 #include "headers/ops.hpp"
 #include <shlobj.h>
 

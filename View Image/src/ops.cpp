@@ -3,7 +3,7 @@
 #include "../resource.hpp"
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
-#include "stb_image_resize.hpp"
+#include "stb_image_resize.h"
 
 #pragma region File
 
@@ -769,7 +769,89 @@ void ConvertToPremultipliedAlpha(uint32_t* imageData, int width, int height) {
 	}
 }
 
+// go back to this
+uint32_t* GetImageFromClipboard(int& width, int& height) {
+	uint32_t* imagePixels = nullptr;
+
+	if (OpenClipboard(nullptr)) {
+		// Get handle to clipboard data
+		HANDLE hData = GetClipboardData(CF_BITMAP);
+		if (hData != nullptr) {
+			// Convert handle to actual bitmap
+			HBITMAP hBitmap = (HBITMAP)hData;
+
+			// Get bitmap info
+			BITMAP bmp;
+			GetObject(hBitmap, sizeof(BITMAP), &bmp);
+
+			// Allocate memory for pixel data
+			int imageSize = bmp.bmWidth * bmp.bmHeight;
+			imagePixels = new uint32_t[imageSize];
+
+			// Get device context
+			HDC hdc = GetDC(nullptr);
+			HDC memDC = CreateCompatibleDC(hdc);
+
+			// Copy bitmap to memory DC
+			HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, hBitmap);
+
+			// Get DIB section to ensure proper handling of alpha channel
+			BITMAPINFO bmi = { 0 };
+			bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			bmi.bmiHeader.biWidth = bmp.bmWidth;
+			bmi.bmiHeader.biHeight = bmp.bmHeight;
+			bmi.bmiHeader.biPlanes = 1;
+			bmi.bmiHeader.biBitCount = 32;
+			bmi.bmiHeader.biCompression = BI_RGB;
+
+			if (GetDIBits(memDC, hBitmap, 0, bmp.bmHeight, imagePixels, &bmi, DIB_RGB_COLORS) != 0) {
+				// GetDIBits succeeded, no additional processing needed
+			}
+			else {
+				// GetDIBits failed
+				delete[] imagePixels;
+				imagePixels = nullptr;
+			}
+
+			// Cleanup
+			SelectObject(memDC, oldBitmap);
+			DeleteDC(memDC);
+			ReleaseDC(nullptr, hdc);
+
+			// Set width and height
+			width = bmp.bmWidth;
+			height = bmp.bmHeight;
+		}
+
+		CloseClipboard();
+	}
+	return imagePixels;
+}
+
+bool PasteImageFromClipboard(GlobalParams* m) {
+	createUndoStep(m);
+	int w, h;
+	uint32_t* d = GetImageFromClipboard(w, h);
+	if (d) {
+		if (m->imgdata) {
+			free(m->imgdata);
+		}
+		Beep(4000, 40);
+		m->imgdata = d;
+		m->imgwidth = w;
+		m->imgheight = h;
+	}
+	else {
+		Beep(2000, 90);
+	}
+
+	return true;
+}
+
 bool CopyImageToClipboard(GlobalParams* m, void* imageData, int width, int height){ // USED CHATGPT BECAUSE I DONT WANT TO REINVENT THE WHEEL WHEN USING THIS STUPID API
+	Beep(500, 20);
+	Beep(500, 20);
+
 	// Initialize COM for clipboard operations
 	if (FAILED(OleInitialize(NULL)))
 		return false;
