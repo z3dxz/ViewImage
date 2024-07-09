@@ -1,11 +1,26 @@
+#include <filesystem>
 #include "headers/ops.hpp"
 #include "headers/imgload.hpp"
-#include "../resource.hpp"
+#include "../resource.h"
 
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize.h"
 
 #pragma region File
+
+bool DeleteDirectory(const char* directoryPath) {
+	return std::filesystem::remove_all(directoryPath);
+}
+
+
+
+void DeleteTempFiles(GlobalParams* m) {
+	if (!DeleteDirectory(m->undofolder.c_str())) {
+		DWORD error = GetLastError();
+		std::string s = "Failed to remove temporary files: ERR CODE: " + std::to_string(error);
+		MessageBox(m->hwnd, "Failed to remove the temporary files for this application. You can manually remove them at AppData\\Local\\Temp, with all containing view image directories", s.c_str(), MB_OK | MB_ICONERROR);
+	}
+}
 
 bool isFile(const char* str, const char* suffix) {
 	size_t len_str = strlen(str);
@@ -163,6 +178,52 @@ void swapPointers(void*& ptr1, void*& ptr2) {
 	ptr1 = ptr2;
 	ptr2 = temp;
 }
+// to access memory pointer itself, use double pointer
+void ConfirmCropBuffer(GlobalParams* m, void** buffer, int newW, int newH) {
+
+	void* MyNewCropLifestyle = malloc(newW * newH * 4);
+
+	for (int y = 0; y < newH; y++) {
+		for (int x = 0; x < newW; x++) {
+			uint32_t offsetX = m->leftP * (float)m->imgwidth;
+			uint32_t offsetY = m->topP * (float)m->imgheight;
+			*GetMemoryLocation(MyNewCropLifestyle, x, y, newW, newH) = *GetMemoryLocation(*buffer, x + offsetX, y + offsetY, m->imgwidth, m->imgheight);
+		}
+	}
+
+	free(*buffer);
+	*buffer = malloc(newW * newH * 4);
+	memcpy(*buffer, MyNewCropLifestyle, newW * newH * 4);
+
+	free(MyNewCropLifestyle);
+}
+
+void ConfirmCrop(GlobalParams* m) {
+
+	float difPerX = m->rightP - m->leftP;
+	float difPerY = m->bottomP - m->topP;
+
+	int newW = difPerX * (float)m->imgwidth;
+	int newH = difPerY * (float)m->imgheight;
+
+	if (newW < 1 || newH < 1) {
+		MessageBox(m->hwnd, "Your width or height is too small", "Crop Invalid", MB_OK | MB_ICONERROR);
+		return;
+	}
+
+	createUndoStep(m, false);
+
+	ConfirmCropBuffer(m, &m->imgdata, newW, newH);
+	ConfirmCropBuffer(m, &m->imgoriginaldata, newW, newH);
+
+	m->imgwidth = newW;
+	m->imgheight = newH;
+	
+	m->shouldSaveShutdown = true;
+	
+	autozoom(m);
+	RedrawSurface(m);
+}
 /*
 
 void ResizeImageToSize(GlobalParams* m, int width, int height) {
@@ -213,7 +274,7 @@ void performResize(GlobalParams* m, void** memory, int owidth, int oheight, int 
 
 void ResizeImageToSize(GlobalParams* m, int nwidth, int nheight) {
 
-	createUndoStep(m);
+	createUndoStep(m, false);
 
 	performResize(m, &m->imgdata, m->imgwidth, m->imgheight, nwidth, nheight);
 	performResize(m, &m->imgoriginaldata, m->imgwidth, m->imgheight, nwidth, nheight);
@@ -244,7 +305,7 @@ void rotatememory(GlobalParams* m, int owidth, int oheight, int nwidth, int nhei
 
 void rotateImage90Degrees(GlobalParams* m) {
 
-	createUndoStep(m);
+	createUndoStep(m, false);
 	int oldw = m->imgwidth;
 	int oldh = m->imgheight;
 	int neww = m->imgheight;
@@ -287,16 +348,85 @@ void rotateImage90Degrees(GlobalParams* m) {
 	RedrawSurface(m);
 }
 */
-
+/*
 int GetButtonInterval(GlobalParams* m) {
 	return m->iconSize + 5;
 }
+*/
+
+int GetIndividualButtonPush(GlobalParams* m, int index) {
+	return m->iconSize + 5 + (m->toolbartable[index].isSeperator * 4);
+}
+
+int GetLocationFromButton(GlobalParams* m, int index) {
+	int p = 0;
+	for (size_t i = 0; i < m->toolbartable.size(); ++i) {
+		p += GetIndividualButtonPush(m, i);
+		if (i == index-1) {
+			return p;
+		}
+		if (m->imgwidth < 1) {
+			return 0;
+		}
+		if (m->drawmode && i == 11) {
+			return 0;
+		}
+	}
+	return 0;
+}
+
 
 int getXbuttonID(GlobalParams* m, POINT mPos) {
+	if (mPos.y > m->toolheight || mPos.y < 2 || mPos.x < 2) {
+		return -1;
+	}
+
+	int p = 0;
+	for (size_t i = 0; i < m->toolbartable.size(); ++i) {
+		p += GetIndividualButtonPush(m, i);
+		if (p > mPos.x) {
+			return i;
+		}
+		if (m->imgwidth < 1) {
+			return -1;
+		}
+		if (m->drawmode && i == 11) {
+			return -1;
+		}
+	}
+	return -1;
+	/*
+	
 	LONG x = mPos.x;
 	int interval = GetButtonInterval(m);
 	return (mPos.y > m->toolheight || mPos.y < 2 || mPos.x < 2) ? -1 : x / interval;
+	*/
 }
+
+void GetCropCoordinates(GlobalParams* m, uint32_t* outDistLeft, uint32_t* outDistRight, uint32_t* outDistTop, uint32_t* outDistBottom) {
+
+	float realWidth = (float)(m->CoordRight - m->CoordLeft);
+	float realHeight = (float)(m->CoordBottom - m->CoordTop);
+
+	*outDistLeft = m->CoordLeft + (m->leftP * realWidth);
+	*outDistTop = m->CoordTop + (m->topP * realHeight);
+	*outDistRight = m->CoordLeft + (m->rightP * realWidth);
+	*outDistBottom = m->CoordTop + (m->bottomP * realHeight);
+}
+
+void GetCropPercentagesFromCursor(GlobalParams* m, int cursorX, int cursorY, float* outX, float* outY) {
+
+	float realWidth = (float)(m->CoordRight - m->CoordLeft);
+	float realHeight = (float)(m->CoordBottom - m->CoordTop);
+	
+	*outX = (float)(cursorX - m->CoordLeft)/realWidth;
+	*outY = (float)(cursorY - m->CoordTop) / realHeight;
+
+	// clamp values
+	if (*outX < 0.0f) { *outX = 0.0f; } if (*outX > 1.0f) { *outX = 1.0f; }
+	if (*outY < 0.0f) { *outY = 0.0f; } if (*outY > 1.0f) { *outY = 1.0f; }
+}
+
 
 float log_base_1_25(float x) {
 	float log_1_25 = log(1.25);
@@ -614,6 +744,90 @@ uint32_t multiplyColor(uint32_t color, float multiplier) {
 	return (alpha << 24) | (red << 16) | (green << 8) | blue;
 }
 
+void gaussian_blur_B(uint32_t* input_buffer, uint32_t* output_buffer, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
+	// Compute kernel size
+	int kernel_size = (int)ceil(sigma * 3) * 2 + 1;
+
+	// Allocate kernel array
+	double* kernel = (double*)malloc(kernel_size * sizeof(double));
+
+	// Compute kernel values
+	double sum = 0.0;
+	int i;
+	for (i = 0; i < kernel_size; i++) {
+		double x = (double)i - (double)(kernel_size - 1) / 2.0;
+		kernel[i] = gaussian(x, sigma);
+		sum += kernel[i];
+	}
+
+	// Normalize kernel
+	for (i = 0; i < kernel_size; i++) {
+		kernel[i] /= sum;
+	}
+
+	// Allocate temporary row array
+	uint32_t* row = (uint32_t*)malloc(width * sizeof(uint32_t));
+
+	// Blur horizontally
+	int x, y;
+	for (y = 0; y < lH; y++) {
+		for (x = 0; x < lW; x++) {
+			int k;
+			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0, sum_a = 0.0;
+			for (k = 0; k < kernel_size; k++) {
+				int xk = x - (kernel_size - 1) / 2 + k;
+				if (xk >= 0 && xk < width) {
+					uint32_t pixel = *GetMemoryLocation(input_buffer, (xk + offX), (y + offY), width, height);
+					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
+					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
+					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
+					sum_a += (double)((pixel & 0xff000000) >> 24) * kernel[k];
+				}
+			}
+			row[x] = ((uint32_t)(sum_a + 0.5) << 24) |
+				((uint32_t)(sum_r + 0.5) << 16) |
+				((uint32_t)(sum_g + 0.5) << 8) |
+				((uint32_t)(sum_b + 0.5));
+		}
+		// Copy row back into output buffer
+		for (x = 0; x < lW; x++) {
+			*GetMemoryLocation(output_buffer, (x + offX), (y + offY), width, height) = row[x];
+		}
+	}
+
+	// Blur vertically
+	for (x = 0; x < lW; x++) {
+		for (y = 0; y < lH; y++) {
+			int k;
+			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0, sum_a = 0.0;
+			for (k = 0; k < kernel_size; k++) {
+				int yk = y - (kernel_size - 1) / 2 + k;
+				if (yk >= 0 && yk < lH) {
+					uint32_t pixel = *GetMemoryLocation(output_buffer, (x + offX), (yk + offY), width, height);
+					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
+					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
+					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
+					sum_a += (double)((pixel & 0xff000000) >> 24) * kernel[k];
+				}
+			}
+			row[y] = ((uint32_t)(sum_a + 0.5) << 24) |
+				((uint32_t)(sum_r + 0.5) << 16) |
+				((uint32_t)(sum_g + 0.5) << 8) |
+				((uint32_t)(sum_b + 0.5));
+		}
+		// Copy row back into output buffer
+		for (y = 0; y < lH; y++) {
+			*GetMemoryLocation(output_buffer, (offX + x), (offY + y), width, height) = row[y];
+		}
+	}
+
+	// Free memory
+	free(kernel);
+	free(row);
+}
+
+
+
 // Gaussian blur function
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
 	// Compute kernel size
@@ -717,7 +931,7 @@ void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels) {
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	//fast_gaussian_blur(px, gd, m->width, m->toolheight, 4, 4.0f, 10, Border::kKernelCrop);
 	//gaussian_blur(pixels, m->width, 40, 4.0, m->width, 40, 0, 0);
-	boxBlur(pixels, m->width, 40, 15);
+	boxBlur(pixels, m->width, m->toolheight, 15);
 
 	//convolution((uint32_t*)m->scrdata, (uint32_t*)m->toolbar_gaussian_data, m->width, 40, kernel, 9);
 
@@ -829,7 +1043,7 @@ uint32_t* GetImageFromClipboard(int& width, int& height) {
 }
 
 bool PasteImageFromClipboard(GlobalParams* m) {
-	createUndoStep(m);
+	createUndoStep(m, false);
 	int w, h;
 	uint32_t* d = GetImageFromClipboard(w, h);
 	if (d) {
@@ -939,6 +1153,6 @@ bool CopyImageToClipboard(GlobalParams* m, void* imageData, int width, int heigh
 }
 
 uint32_t change_alpha(uint32_t color, uint8_t new_alpha) {
-	// Assuming color format is 0xRRGGBBAA
+	// Assuming color format is 0xRRGGBBAA 
 	return (color & 0xFFFFFF) | (static_cast<uint32_t>(new_alpha) << 24);
 }

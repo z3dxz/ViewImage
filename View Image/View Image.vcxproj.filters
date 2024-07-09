@@ -33,7 +33,13 @@
     <ClCompile Include="src\leftrightlogic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\dialogcontrol.cpp">
+    <ClCompile Include="src\resizedialog.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\effectdialog\brightnesscontrast.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\effectdialog\gaussian.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -68,7 +74,16 @@
     <ClInclude Include="src\gaussian_blur_template.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\headers\dialogcontrol.hpp">
+    <ClInclude Include="src\headers\resizedialog.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\effectdialog\headers\brightnesscontrast.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\effectdialog\headers\gaussian.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -112,6 +127,45 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="iconbar_b.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="lock.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="bitmap1.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="icon2.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="bitmap2.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="unlock.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="lock_mask.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="unlock_mask.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="lock_mask.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="unlock_mask.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="lock_icon_i.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="unlockicon.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="12iconmap.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="cropicon.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

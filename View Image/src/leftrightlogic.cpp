@@ -70,3 +70,40 @@ std::string GetNextFilePath(const char* file_Path) {
 	 }
 	 return "No";
 }
+
+
+void GoLeft(GlobalParams *m) {
+	if (!m->loading && !m->halt && m->imgwidth > 0) {
+		m->halt = true;
+		m->loading = true;
+
+		std::string k = GetPrevFilePath();
+		const char* npath = k.c_str();
+		//MessageBox(0, mpath, npath, MB_OKCANCEL);
+		if (k != "No") {
+			OpenImageFromPath(m, npath, true);
+		}
+		m->loading = false;
+		m->halt = false;
+	}
+	RedrawSurface(m);
+}
+
+void GoRight(GlobalParams* m) {
+	if (!m->loading && !m->halt && m->imgwidth > 0) {
+		m->halt = true;
+		m->loading = true;
+
+		const char* mpath = m->fpath.c_str();
+
+		std::string k = GetNextFilePath(mpath);
+		const char* npath = k.c_str();
+		//MessageBox(0, mpath, npath, MB_OKCANCEL);
+		if (k != "No") {
+			OpenImageFromPath(m, npath, true);
+		}
+		m->loading = false; 
+		m->halt = false;
+	}
+	RedrawSurface(m);
+}

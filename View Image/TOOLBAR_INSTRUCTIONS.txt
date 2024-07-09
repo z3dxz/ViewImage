@@ -1,0 +1,9 @@
+MAKE SURE TO DUPLICATE THE TOOLBAR RAW FILE TO ANOTHER TAB SO YOU WONT OVERRRIDE IT
+
+
+- Make two layers for in and out another for spacers
+- bevel with depth 2 and strength 0.28 at 315 deg no hard edges
+- Sep layer: Black (inv color) Gaussian blur R: 6.0 GE: 1. Quality: 4
+- Duplicate outline layer 2 times and merge 2 times so there was 3 copies
+- Bevel the following outline layer with same as before but with stength at 0.20
+MERGE

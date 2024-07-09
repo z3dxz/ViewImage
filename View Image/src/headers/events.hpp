@@ -5,7 +5,10 @@
 #include "imgload.hpp"
 #include "leftrightlogic.hpp"
 #include <string>
-#include "dialogcontrol.hpp"
+#include "resizedialog.hpp"
+
+#include "../effectdialog/headers/brightnesscontrast.h"
+#include "../effectdialog/headers/gaussian.h"
 
 
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv);
@@ -23,7 +26,8 @@ void ConvertToPremultipliedAlpha(uint32_t* imageData, int width, int height);
 void ToggleFullscreen(GlobalParams* m);
 
 
-void createUndoStep(GlobalParams* m);
+void createUndoStep(GlobalParams* m, bool async);
+void ShowMyInformation(GlobalParams* m);
 
 
 void TurnOnDraw(GlobalParams* m);

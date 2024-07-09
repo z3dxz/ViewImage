@@ -1,14 +1,153 @@
 #include "headers/events.hpp" // e
-#include "../resource.hpp"
+#include "../resource.h"
 #include <Shlwapi.h>
 #include <vector>
+#include <fstream>
+#include <thread>
+#include <limits>
+#include <future>
 
-void createUndoStep(GlobalParams* m);
+
+
 
 void ToggleFullscreen(GlobalParams* m);
 
+
+#include <future>     // for std::async
+#include <mutex>      // for std::mutex, std::unique_lock
+#include <condition_variable> // for std::condition_variable
+#include <random>
+
+std::mutex mtx;
+std::condition_variable cv;
+bool resizeCompleted = false;
+
+void ResizeBuffers(GlobalParams* m) {
+	RECT ws = { 0 };
+	GetClientRect(m->hwnd, &ws);
+	int newWidth = ws.right - ws.left;
+	int newHeight = ws.bottom - ws.top;
+
+	if (newWidth < 1) { newWidth = 1; }
+	if (newHeight < 1) { newHeight = 1; }
+
+	// Allocate new buffers
+	void* newScrdata = realloc(m->scrdata, newWidth * newHeight * 4);
+	void* newToolbarData = realloc(m->toolbar_gaussian_data, newWidth * m->toolheight * 4);
+	std::vector<uint32_t> newIth(newWidth);
+	std::vector<uint32_t> newItv(newHeight);
+
+	if (newScrdata && newToolbarData) {
+		// Update with new data
+		m->width = newWidth;
+		m->height = newHeight;
+		m->scrdata = newScrdata;
+		m->toolbar_gaussian_data = newToolbarData;
+		m->ith = std::move(newIth);
+		m->itv = std::move(newItv);
+		for (uint32_t i = 0; i < m->width; i++)
+			m->ith[i] = i;
+		for (uint32_t i = 0; i < m->height; i++)
+			m->itv[i] = i;
+	}
+	else {
+		// Error handling: Failed to allocate memory
+		if (newScrdata) free(newScrdata);
+		if (newToolbarData) free(newToolbarData);
+	}
+
+	// Notify main thread
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		resizeCompleted = true;
+	}
+	cv.notify_one();
+}
+
+void Size(GlobalParams* m) {
+	if (m->scrdata) {
+		// Reset completion flag
+		{
+			std::lock_guard<std::mutex> lock(mtx);
+			resizeCompleted = false;
+		}
+
+		// Asynchronously resize buffers
+		std::future<void> asyncResize = std::async(std::launch::async, ResizeBuffers, m);
+
+		// Wait for the async operation to complete or timeout
+		{
+			std::unique_lock<std::mutex> lock(mtx);
+			if (!cv.wait_for(lock, std::chrono::milliseconds(1000), [] { return resizeCompleted; })) {
+				// Handle timeout: async operation took too long
+				// Optionally, cancel asyncResize or retry
+			}
+		}
+		// Continue with other operations after resizing (if needed)
+		autozoom(m);
+		RedrawSurface(m);
+	}
+}
+
+HANDLE hMutex;
+// initiz
 bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 
+	m->toolbartable = {
+	   {0,   "Open Image (F)" , false},
+	   {31,  "Save as PNG (CTRL+S)", true},
+	   {62,  "Zoom In", false},
+	   {93,  "Zoom Out", false},
+	   {124, "Zoom Auto", false},
+	   {155, "Zoom 1:1 (100%)", true},
+	   {186, "Rotate", false},
+	   {217, "Annotate (G)", false},
+	   {248, "Image Effects", true},
+	   {279, "DELETE image", false},
+	   {310, "Print", false},
+	   {341, "Copy Image", true},
+	   {372, "Information", false}
+	};
+	DWORD pathLength = MAX_PATH;
+	TCHAR tempPath[MAX_PATH];
+	GetTempPath(pathLength, tempPath);
+	if (!tempPath) {
+		MessageBox(m->hwnd, "Unable to locate windows temporary files path", "Error", MB_OK | MB_ICONERROR);
+		exit(0);
+		return false;
+	}
+
+	std::string firstfolder = std::string(tempPath) + "View Image";
+	CreateDirectory(firstfolder.c_str(), NULL);
+	
+	hMutex = CreateMutex(NULL, TRUE, "ViewImageMainProcessUndoCatalogPackagesTemporaryFilesMutex");
+	if (GetLastError() == ERROR_ALREADY_EXISTS) {
+		// Great!
+	}
+	else {
+		bool isempty = PathIsDirectoryEmpty(firstfolder.c_str());
+		if (!isempty) {
+			int r = MessageBox(m->hwnd, "It appears that View Image has not been shutdown correctly last session\nThe temporary files are still present. It is highly recommended that you delete these for improved disk space and performance. \nWould you like to remove excess temporary files?", "Warning", MB_ICONWARNING | MB_YESNO);
+			if (r == IDYES) {
+				// delete
+				if (!DeleteDirectory(firstfolder.c_str())) {
+					DWORD error = GetLastError();
+					std::string s = "Failed to remove temporary files: ERR CODE: " + std::to_string(error);
+					MessageBox(m->hwnd, "Failed to remove the temporary files for this application. You can manually remove them at AppData\\Local\\Temp, with all containing view image directories", s.c_str(), MB_OK | MB_ICONERROR);
+				}
+				CreateDirectory(firstfolder.c_str(), NULL);
+			}
+		}
+	}
+
+	int PID = GetCurrentProcessId();
+	
+	m->undofolder = std::string(tempPath) + "View Image" + "\\VIEW_IMAGE_TEMPORARY_DATA_" + std::to_string(PID) + "\\";
+	if (!CreateDirectory(m->undofolder.c_str(), NULL)) {
+		MessageBox(m->hwnd, "Unable to create process-specific temporary files folder", "Error", MB_OK | MB_ICONERROR);
+		exit(0);
+		return false;
+	}
 
 	char buffer[MAX_PATH];
 	DWORD length = GetModuleFileName(nullptr, buffer, MAX_PATH);
@@ -17,33 +156,41 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	m->cd = std::string(buffer);
 
 	//InitFont(hwnd, "segoeui.TTF", 14);
+
+	// load fonts here
+	m->Verdana = LoadFont(m, "Verdana.ttf");
+	m->SegoeUI = LoadFont(m, "SegoeUI.ttf");
+	m->OCRAExt = LoadFont(m, "OCRAEXT.ttf");
+	m->Tahoma = LoadFont(m, "Tahoma.ttf");
+
 	size_t scrsize = m->width * m->height * 4;
 	m->scrdata = malloc(scrsize);
 	for (uint32_t i = 0; i < m->width * m->height; i++) {
-		*((uint32_t*)m->scrdata+i) = 0x008080;
-
+		*((uint32_t*)m->scrdata+i) = 0x008080; // TEAL color
 	}
 
 	m->toolbar_gaussian_data = malloc(m->width * m->toolheight * 4);
 
-	m->toolbarData_shadow = LoadImageFromResource(IDB_PNG2, m->widthos, m->heightos, m->channelos);
-	m->toolbarData = LoadImageFromResource(IDB_PNG5, m->widthos, m->heightos, m->channelos);
-	
+	m->toolbarData = LoadImageFromResource(TOOLBAR_RES, m->widthos, m->heightos, m->channelos);
+
+
 
 
 	int null1, null2, null3;
-	m->mainToolbarCorner = LoadImageFromResource(IDB_PNG3, null1, null2, null3);
 
-	m->fullscreenIconData = LoadImageFromResource(IDB_PNG4, null1, null2, null3);
+	// icons
+	m->menu_icon_atlas = LoadImageFromResource(ICON_MAP, m->menu_atlas_SizeX, m->menu_atlas_SizeY, m->dumpchannel);
+	m->fullscreenIconData = LoadImageFromResource(FS_ICON, null1, null2, null3);
+	m->cropImageData = LoadImageFromResource(CROPICON, null1, null2, null3);
 
 	// turn arguments into path
 	int size_needed = WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, NULL, 0, NULL, NULL);
 
-
-	InitFont(m, "segoeui.TTF", 14);
+	
 
 	char* path = (char*)malloc(size_needed);
 	WideCharToMultiByte(CP_UTF8, 0, argv[1], -1, path, size_needed, NULL, NULL);
+
 	
 	
 	if (argc >= 2) {
@@ -58,6 +205,19 @@ bool Initialization(GlobalParams* m, int argc, LPWSTR* argv) {
 	}
 
 	Size(m);
+	/*
+	// init joystick
+	m->joyInfoEx.dwSize = sizeof(JOYINFOEX);
+	m->joyInfoEx.dwFlags = JOY_RETURNALL;
+
+	if (joyGetPosEx(m->joystickID, &m->joyInfoEx) != JOYERR_NOERROR) {
+		MessageBox(NULL, "Joystick not found!", "Error", MB_OK | MB_ICONERROR);
+	}
+	else {
+		m->isJoystick = true;
+	}
+	
+	*/
 	
 	return true;
 }
@@ -82,7 +242,86 @@ uint32_t PickColorFromDialog(GlobalParams* m, uint32_t def, bool* success) {
 	}
 }
 
-int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
+void OpenImageEffectsMenu(GlobalParams* m) {
+	m->menuVector = {
+
+		{"Brightness/Contrast",
+			[m]() -> bool {
+				m->isMenuState = false;
+				RedrawSurface(m);
+				ShowBrightnessContrastDialog(m);
+				return true;
+			},65,0
+		},
+
+		{"Gaussian Blur",
+			[m]() -> bool {
+				m->isMenuState = false;
+				RedrawSurface(m);
+				ShowGaussianDialog(m);
+				return true;
+			},91,0
+		},
+
+		{"Draw Text{s}",
+			[m]() -> bool {
+
+				
+
+				RedrawSurface(m);
+
+				m->isMenuState = false;
+
+				return true;
+			},0,13
+		},
+
+		{"Crop Image",
+			[m]() -> bool {
+				autozoom(m);
+				m->mscaler = m->mscaler * 0.8f;
+				TurnOffDraw(m);
+				m->drawmode = false;
+				m->isInCropMode = true;
+				RedrawSurface(m);
+
+				return true;
+			},52,13
+		},
+
+		{"Delete All Edits",
+			[m]() -> bool {
+			
+				int result = MessageBox(m->hwnd, "This will restore the image to when it was first loaded", "Are You Sure?", MB_YESNO);
+				if (result == IDYES) {
+					memcpy(m->imgdata, m->imgoriginaldata, m->imgwidth * m->imgheight * 4);
+				}
+
+
+				return true;
+			},78,0
+		},
+
+	};
+
+	m->menuX = GetLocationFromButton(m, 8); // 8 = effects
+	m->menuY = m->toolheight;
+	m->isMenuState = true;
+}
+
+void ShowMyInformation(GlobalParams* m) {
+	char str[256];
+
+	std::string txt = "No Image Loaded";
+	if (!m->fpath.empty()) {
+		txt = m->fpath;
+	}
+	sprintf(str, "\nCurrently Loaded: \n%s\n\nAttributes (in memory):\nWidth: %d\nHeight: %d\n\nAbout:\nVisit cosine64.com for more quality software\nVersion: %s", txt.c_str(), m->imgwidth, m->imgheight, REAL_BIG_VERSION_BOOLEAN);
+
+	MessageBox(m->hwnd, str, "Information", MB_OK);
+}
+
+int PerformCasedBasedOperation(GlobalParams* m, uint32_t id, bool menustate) {
 	if (m->imgwidth > 0 || id == 0) {}
 	else { return 1; }
 	switch (id) {
@@ -130,7 +369,16 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
 		return 0;
 	}
 	case 8: {
-
+		// effects
+		if (menustate) {
+			m->isMenuState = false;
+			break;
+		}
+		OpenImageEffectsMenu(m);
+		return 0;
+	}
+	case 9: {
+		// DELETE
 		if (m->fpath != "Untitled") {
 
 			// delete
@@ -154,13 +402,13 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
 
 		return 0;
 	}
-	case 9: {
+	case 10: {
 		// print
 		Print(m);
 
 		return 0;
 	}
-	case 10: {
+	case 11: {
 
 		// copy
 		if (!CopyImageToClipboard(m, m->imgdata, m->imgwidth, m->imgheight)) {
@@ -169,19 +417,13 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
 
 		return 0;
 	}
-	case 11: {
+	case 12: {
 
+
+		// information
 		// image info
-
-		char str[256];
-
-		std::string txt = "No Image Loaded";
-		if (!m->fpath.empty()) {
-			txt = m->fpath;
-		}
-		sprintf(str, "Image Information:\n%s\nWidth: %d\nHeight: %d\n\nAbout:\nVisit cosine64.com for more quality software\nVersion: %s", txt.c_str(), m->imgwidth, m->imgheight, REAL_BIG_VERSION_BOOLEAN);
-
-		MessageBox(m->hwnd, str, "Information", MB_OK);
+		
+		ShowMyInformation(m);
 		return 0;
 	}
 	}
@@ -189,7 +431,7 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id) {
 	return 1;
 }
 
-void CloseToolbarWhenInactive(GlobalParams* m, POINT& k) {
+void CloseMenuWhenInactive(GlobalParams* m, POINT& k) {
 	if (k.x > m->actmenuX && k.y > m->actmenuY && k.x < (m->actmenuX + m->menuSX) && k.y < (m->actmenuY + m->menuSY)) {
 
 	}
@@ -202,15 +444,32 @@ void CloseToolbarWhenInactive(GlobalParams* m, POINT& k) {
 
 
 
+bool test1 = false;
 bool ToolbarMouseDown(GlobalParams* m) {
+	test1 = true;
+
+	if (m->isInCropMode) {
+		if (m->imgwidth < 1) {
+			PrepareOpenImage(m);
+		}
+
+		m->isMovingTL = m->CropHandleSelectTL;
+		m->isMovingTR = m->CropHandleSelectTR;
+		m->isMovingBL = m->CropHandleSelectBL;
+		m->isMovingBR = m->CropHandleSelectBR;
+
+		return 0;
+	}
+
 	if (m->eyedroppermode) {
 		return 0;
 	}
 	POINT mPP;
 	GetCursorPos(&mPP);
 	ScreenToClient(m->hwnd, &mPP);
-	if (m->isMenuState) {
-		CloseToolbarWhenInactive(m, mPP);
+	bool prevmenustate = m->isMenuState;
+	if (prevmenustate) {
+		CloseMenuWhenInactive(m, mPP);
 		//return 1;
 	}
 
@@ -276,8 +535,7 @@ bool ToolbarMouseDown(GlobalParams* m) {
 		if (mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom) {// recopied over and over. right now im putting in right mouse down
 			m->drawtype = 1;
 			TurnOnDraw(m);
-			createUndoStep(m);
-
+			createUndoStep(m, true);
 		}
 	}
 
@@ -294,10 +552,14 @@ bool ToolbarMouseDown(GlobalParams* m) {
 
 	uint32_t id = getXbuttonID(m, mPP);
 
-	return PerformCasedBasedOperation(m, id);
+	return PerformCasedBasedOperation(m, id, prevmenustate);
 }
 
 void MouseDown(GlobalParams* m) {
+	test1 = true;
+	if (m->isInCropMode) {
+		return;
+	}
 
 	if (m->eyedroppermode) {
 		return;
@@ -312,7 +574,7 @@ void MouseDown(GlobalParams* m) {
 	GetCursorPos(&k);
 	ScreenToClient(m->hwnd, &k);
 
-	CloseToolbarWhenInactive(m, k);
+	CloseMenuWhenInactive(m, k);
 	
 
 	if (k.y > m->toolheight) {
@@ -397,9 +659,14 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 	float adjustment_factor = std::pow(2, delta_time_difference * 10);
 
 	m->a_resolution *= adjustment_factor;
-	m->a_resolution = max(4.0f, min(30.0f, m->a_resolution));
-
-
+	m->a_resolution = max(1.0f, min(25.0f, m->a_resolution));
+	
+	if (!(GetAsyncKeyState(VK_LBUTTON) & 0x8000) && !(GetAsyncKeyState(VK_RBUTTON) & 0x8000)) {
+		TurnOffDraw(m);
+		m->mouseDown = false;
+		m->toolmouseDown = false;
+		return;
+	}
     ScreenToClient(m->hwnd, pos);
 
     int k = (int)((float)((m->lastMouseX) - m->CoordLeft) * (1.0f / m->mscaler));
@@ -426,6 +693,9 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 		float realOpacity = pow(m->a_opacity, 4);
 
 		for (int i = 0; i < samples0; i++) {
+
+			//auto start = std::chrono::high_resolution_clock::now();
+
 			for (int y = 0; y < diameter; y++) {
 				for (int x = 0; x < diameter; x++) {
 					float virtual_x = (float)x + 0.5f;
@@ -477,10 +747,15 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 				}
 			}
 
+			//auto end = std::chrono::high_resolution_clock::now();
+			//std::chrono::duration<float, std::milli> duration = end - start;
+			//m->etime = duration.count();
+
 		}
 		free(k2);
 
 		//Beep(500, 50);
+		Beep(500, 500);
 		m->lastMouseX = pos->x;
 		m->lastMouseY = pos->y;
 		m->shouldSaveShutdown = true;
@@ -494,18 +769,126 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 
 	m->ms_time = delta_time;
 
-    RedrawSurface(m);
+
 }
 
 
-bool beforeas = false;
+bool firsttime = true;
 
+void GuidedRedrawSurface(GlobalParams* m) {
+	ResetCoordinates(m);
 
+	if (m->CoordTop > m->toolheight) {
+		if (firsttime) {
+			RedrawSurface(m);
+			firsttime = false;
+		}
+		else {
+			HRGN rgn = CreateRectRgn(0, m->toolheight, m->width, m->height);
+			SelectClipRgn(m->hdc, rgn);
+			RedrawSurface(m, true);
+			SelectClipRgn(m->hdc, NULL);
+		}
+	}
+	else {
+		firsttime = true;
+		RedrawSurface(m);
+	}
+}
 
 void MouseMove(GlobalParams* m) {
+	bool isAMouseButtonDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) || (GetAsyncKeyState(VK_MBUTTON) & 0x8000) || (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+	if ((!isAMouseButtonDown)&& test1) {
+		MouseUp(m);
+		test1 = false;
+	}
+	//auto start = std::chrono::high_resolution_clock::now();
+		
 	ShowCursor(1);
 	POINT pos = { 0 };
 	GetCursorPos(&pos);
+
+	// i would probably min this
+	if (m->isInCropMode) {
+		ScreenToClient(m->hwnd, &pos);
+		HCURSOR cursor = LoadCursor(NULL, IDC_ARROW);
+		uint32_t distLeft, distRight, distTop, distBottom;
+		GetCropCoordinates(m, &distLeft, &distRight, &distTop, &distBottom);
+
+		uint32_t range = 20;
+		//if(pos.x < 50){
+
+
+		if (pos.x < (distLeft + range) && pos.x >(distLeft - range) && pos.y < (distTop + range) && pos.y >(distTop - range)) {
+			m->CropHandleSelectTL = true;
+			m->CropHandleSelectTR = false;
+			m->CropHandleSelectBL = false;
+			m->CropHandleSelectBR = false;
+		} else if (pos.x < (distRight + range) && pos.x >(distRight - range) && pos.y < (distTop + range) && pos.y >(distTop - range)) {
+			m->CropHandleSelectTL = false;
+			m->CropHandleSelectTR = true;
+			m->CropHandleSelectBL = false;
+			m->CropHandleSelectBR = false;
+		} else if (pos.x < (distLeft + range) && pos.x >(distLeft - range) && pos.y < (distBottom + range) && pos.y >(distBottom - range)) {
+			m->CropHandleSelectTL = false;
+			m->CropHandleSelectTR = false;
+			m->CropHandleSelectBL = true;
+			m->CropHandleSelectBR = false;
+		} else if (pos.x < (distRight + range) && pos.x >(distRight - range) && pos.y < (distBottom + range) && pos.y >(distBottom - range)) {
+			m->CropHandleSelectTL = false;
+			m->CropHandleSelectTR = false;
+			m->CropHandleSelectBL = false;
+			m->CropHandleSelectBR = true;
+		}
+		else {
+			m->CropHandleSelectTL = false;
+			m->CropHandleSelectTR = false;
+			m->CropHandleSelectBL = false;
+			m->CropHandleSelectBR = false;
+		}
+
+		if (m->isMovingTL) {
+			float perX, perY;
+			GetCropPercentagesFromCursor(m, pos.x, pos.y, &perX, &perY);
+			m->leftP = perX;
+			m->topP = perY;
+			if (m->leftP > m->rightP) { m->leftP = m->rightP; }
+			if (m->topP > m->bottomP) { m->topP = m->bottomP; }
+		}
+
+		if (m->isMovingTR) {
+			float perX, perY;
+			GetCropPercentagesFromCursor(m, pos.x, pos.y, &perX, &perY);
+			m->rightP = perX;
+			m->topP = perY;
+			if (m->rightP < m->leftP) { m->rightP = m->leftP; }
+			if (m->topP > m->bottomP) { m->topP = m->bottomP; }
+		}
+
+		if (m->isMovingBL) {
+			float perX, perY;
+			GetCropPercentagesFromCursor(m, pos.x, pos.y, &perX, &perY);
+			m->leftP = perX;
+			m->bottomP = perY;
+			if (m->leftP > m->rightP) { m->leftP = m->rightP; }
+			if (m->bottomP < m->topP) { m->bottomP = m->topP; }
+		}
+
+		if (m->isMovingBR) {
+			float perX, perY;
+			GetCropPercentagesFromCursor(m, pos.x, pos.y, &perX, &perY);
+			m->rightP = perX;
+			m->bottomP = perY;
+			if (m->rightP < m->leftP) { m->rightP = m->leftP; }
+			if (m->bottomP < m->topP) { m->bottomP = m->topP; }
+		}
+
+		RedrawSurface(m);
+
+		SetCursor(cursor);
+		ShowCursor(TRUE);
+		return;
+	}
 
 	if (m->slider1mousedown) {
 		ScreenToClient(m->hwnd, &pos);
@@ -539,23 +922,26 @@ void MouseMove(GlobalParams* m) {
 	}
 	else if (m->drawmousedown) {
 		placeDraw(m, &pos);
-			return;
+		GuidedRedrawSurface(m);
+		return;
 	}
 	else if (m->mouseDown) {
 
+		// Moving around the image using left mouse button
+
+		
 		m->iLocX = m->lockimgoffx - (m->LockmPos.x - pos.x);
 		m->iLocY = m->lockimgoffy - (m->LockmPos.y - pos.y);
-
-		RedrawSurface(m);
+		GuidedRedrawSurface(m);
 		
 	}
 	else {
-
 		ScreenToClient(m->hwnd, &pos);
 
 		if (pos.y <= m->toolheight) {
 			m->lock = true;
 			m->selectedbutton = getXbuttonID(m, pos);
+
 			HRGN rgn = CreateRectRgn(0, 0, m->width, m->toolheight+24);
 			SelectClipRgn(m->hdc, rgn);
 			RedrawSurface(m);
@@ -588,13 +974,7 @@ void MouseMove(GlobalParams* m) {
 		cursor = LoadCursor(GetModuleHandle(0), MAKEINTRESOURCE(IDC_CURSOR2));
 	}
 
-
-	m->isAnnotationCircleShown = as;
-	if (beforeas != as) {
-		RedrawSurface(m);
-	}
-
-
+	
 	if (m->isMenuState) {
 		HRGN rgn = CreateRectRgn(m->actmenuX, m->actmenuY, m->actmenuX + m->menuSX, m->actmenuY + m->menuSY);
 		SelectClipRgn(m->hdc, rgn);
@@ -607,19 +987,139 @@ void MouseMove(GlobalParams* m) {
 
 	SetCursor(cursor);
 	ShowCursor(TRUE);
-	beforeas = as;
-
+	//auto end = std::chrono::high_resolution_clock::now();
+		//std::chrono::duration<float, std::milli> duration = end - start;
+		//m->etime = duration.count();
 	
+}
+GlobalParams* m_proc;
+INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT umsg, WPARAM wparam, LPARAM lparam) {
+	switch (umsg) {
+	case WM_INITDIALOG: {
+		SetTimer(hwndDlg, 1, 100, NULL); // Set a timer to check the condition periodically
+		HWND i = GetDlgItem(hwndDlg, IDC_PROGRESS1);
+		SendMessage(i, (WM_USER + 10), (WPARAM)TRUE, (LPARAM)10);
+		return TRUE;
+	}
+	case WM_TIMER: {
+		if (m_proc->ProcessOfMakingUndoStep == 0) {
+			EndDialog(hwndDlg, 0); // Close the dialog when the condition is false
+
+		}
+		return TRUE;
+	}
+	case WM_CLOSE:
+		EndDialog(hwndDlg, 0); // Handle the close button
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
+
+// Function to show a modal dialog box while processing
+void showMessageWhileProcessing(GlobalParams* m) {
+	
+	m_proc = m;
+	m->tint = true;
+	RedrawSurface(m);
+	DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(LoadingHalt), m->hwnd, DialogProc);
+	m->tint = false;
+	RedrawSurface(m);
+}
+
+uint32_t genrand() {
+	std::uint32_t min = 0;
+	std::uint32_t max = 4294967295;
+
+	// Initialize random number generation
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<std::uint32_t> dis(min, max);
+
+	// Generate a random number
+	std::uint32_t random_number = dis(gen);
+	return random_number;
+}
+
+bool goodbye(GlobalParams* m, uint32_t id) {
+	std::string path = m->undofolder + std::to_string(id) + "-ViewImage.bmp";
+	if (!DeleteFile(path.c_str())) {
+		MessageBox(m->hwnd, "Error cleaning undo data packages", "ERROR", MB_OK | MB_ICONERROR);
+		return 0;
+	}
+	return 1;
+}
+
+uint32_t* hello(GlobalParams* m, uint32_t id) {
+	std::string path = m->undofolder + std::to_string(id) + "-ViewImage.bmp";
+	int x, y, c;
+	uint32_t* data = (uint32_t*)stbi_load(path.c_str(), &x, &y, &c, 4);
+	return data;
 }
 
 bool classUndo = true;
-void createUndoStep(GlobalParams* m) {
+void PushUndo(GlobalParams* m, uint32_t* thisImage, uint32_t* thisOImage) {
 
-    uint32_t* thisImage = (uint32_t*)malloc(m->imgwidth * m->imgheight * 4);
-    if (!thisImage) {
-        MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK | MB_ICONERROR);
-        exit(0);
-    }
+	m->ProcessOfMakingUndoStep++;
+	
+	for (int y = m->undoData.size(); y > m->undoStep; y--) {
+		auto back = m->undoData.back();
+		int last = back.imageID;
+		int lasto = back.imageIDoriginal;
+		if (!goodbye(m, last)) { m->ProcessOfMakingUndoStep = 0; return; }
+		if (!goodbye(m, lasto)) { m->ProcessOfMakingUndoStep = 0; return; }
+		m->undoData.pop_back();
+	}
+
+	uint32_t imageID = genrand();
+	uint32_t imageIDo = genrand();
+
+	std::string path1 = m->undofolder + std::to_string(imageID)  + "-ViewImage.bmp";
+	bool is = stbi_write_bmp(path1.c_str(), m->imgwidth, m->imgheight, 4, thisImage);
+
+	std::string path2 = m->undofolder + std::to_string(imageIDo) + "-ViewImage.bmp";
+	bool is2 = stbi_write_bmp(path2.c_str(), m->imgwidth, m->imgheight, 4, thisOImage);
+
+	if (!is) {
+		MessageBox(m->hwnd, "Failed to create undo data package", "Oops", MB_OK | MB_ICONERROR);
+		return;
+	}
+
+	if (!is2) {
+		MessageBox(m->hwnd, "Failed to create undo data package (2)", "Oops", MB_OK | MB_ICONERROR);
+		return;
+	}
+
+	m->undoStep++;
+	UndoDataStruct k;
+	k.imageID = imageID;
+	k.imageIDoriginal = imageIDo;
+	k.height = m->imgheight;
+	k.width = m->imgwidth;
+	m->undoData.push_back(k);
+
+	free(thisImage);
+	free(thisOImage);
+
+	classUndo = true;
+	m->ProcessOfMakingUndoStep--;
+}
+
+void createUndoStep(GlobalParams* m, bool async) {
+	if (!async) {
+		if (m->ProcessOfMakingUndoStep > 0) {
+			m->loading = true;
+			RedrawSurface(m);
+			showMessageWhileProcessing(m);
+		}
+	}
+
+	uint32_t* thisImage = (uint32_t*)malloc(m->imgwidth * m->imgheight * 4);
+	if (!thisImage) {
+		MessageBox(m->hwnd, "The Undo Step Failed", "Undo Step Fail", MB_OK | MB_ICONERROR);
+		exit(0);
+	}
 
 	uint32_t* thisOImage = (uint32_t*)malloc(m->imgwidth * m->imgheight * 4);
 	if (!thisOImage) {
@@ -627,30 +1127,31 @@ void createUndoStep(GlobalParams* m) {
 		exit(0);
 	}
 
-    memcpy(thisImage, (uint32_t*)m->imgdata, m->imgwidth * m->imgheight * 4);
+	memcpy(thisImage, (uint32_t*)m->imgdata, m->imgwidth * m->imgheight * 4);
 	memcpy(thisOImage, (uint32_t*)m->imgoriginaldata, m->imgwidth * m->imgheight * 4);
 
-	for (int y = m->undoData.size(); y > m->undoStep; y--) {
-		auto back = m->undoData.back();
-		uint32_t* last = back.image;
-		uint32_t* lasto = back.noannoimage;
-		free(last);
-		free(lasto);
-		m->undoData.pop_back();
+	//PushUndo(m, thisImage, thisOImage);
+	if (async) {
+		std::thread t{ PushUndo, m, thisImage, thisOImage };
+		t.detach();
+	}
+	else {
+		PushUndo(m, thisImage, thisOImage);
 	}
 
-	m->undoStep++;
-	UndoDataStruct k;
-	k.image = thisImage;
-	k.noannoimage = thisOImage;
-	k.height = m->imgheight;
-	k.width = m->imgwidth;
-    m->undoData.push_back(k);
-	classUndo = true;
+	m->loading = false;
 }
 
+
+
 void UndoBus(GlobalParams* m) {
-	if (classUndo) { createUndoStep(m); m->undoStep--; }
+	if (m->ProcessOfMakingUndoStep > 0) {
+		m->loading = true;
+		RedrawSurface(m);
+		showMessageWhileProcessing(m);
+	}
+
+	if (classUndo) { createUndoStep(m, false); m->undoStep--; }
     if (m->undoStep > 0) {
         m->undoStep--;
         UndoDataStruct selection = m->undoData[m->undoStep];
@@ -660,13 +1161,36 @@ void UndoBus(GlobalParams* m) {
 		m->imgoriginaldata = malloc(selection.width * selection.height * 4);
 		m->imgwidth = selection.width;
 		m->imgheight = selection.height;
-        memcpy(m->imgdata, selection.image, selection.width * selection.height * 4);
-		memcpy(m->imgoriginaldata, selection.noannoimage, selection.width * selection.height * 4);
+		uint32_t* d1 = hello(m, selection.imageID);
+		uint32_t* d2 = hello(m, selection.imageIDoriginal);
+		if (!d1) {
+			MessageBox(m->hwnd, "Annotated undo data package failed to load", "Oops", MB_OK | MB_ICONERROR);
+			m->loading = false;
+			return;
+		}
+		if (!d2) {
+			MessageBox(m->hwnd, "RAW undo data package failed to load", "Oops", MB_OK | MB_ICONERROR);
+			m->loading = false;
+			return;
+		}
+
+        memcpy(m->imgdata, d1, selection.width * selection.height * 4);
+		memcpy(m->imgoriginaldata, d2, selection.width * selection.height * 4);
+		free(d1);
+		free(d2);
     }
 	classUndo = false;
+	m->loading = false;
+	RedrawSurface(m);
 }
 
 void RedoBus(GlobalParams* m) {
+	if (m->ProcessOfMakingUndoStep > 0) {
+		m->loading = true;
+		RedrawSurface(m);
+		showMessageWhileProcessing(m);
+	}
+
 	int s = m->undoStep;
 	int step = m->undoData.size() - 1;
 	if (s < step) {
@@ -678,20 +1202,37 @@ void RedoBus(GlobalParams* m) {
 		m->imgoriginaldata = malloc(selection.width * selection.height * 4);
 		m->imgwidth = selection.width;
 		m->imgheight = selection.height;
-		memcpy(m->imgdata, selection.image, selection.width * selection.height * 4);
-		memcpy(m->imgoriginaldata, selection.noannoimage, selection.width * selection.height * 4);
+		uint32_t* d1 = hello(m, selection.imageID);
+		uint32_t* d2 = hello(m, selection.imageIDoriginal);
+		if (!d1) {
+			MessageBox(m->hwnd, "Annotated undo data package failed to load", "Oops", MB_OK | MB_ICONERROR);
+			m->loading = false;
+			return;
+		}
+		if (!d2) {
+			MessageBox(m->hwnd, "RAW undo data package failed to load", "Oops", MB_OK | MB_ICONERROR);
+			m->loading = false;
+			return;
+		}
+		memcpy(m->imgdata, d1, selection.width * selection.height * 4);
+		memcpy(m->imgoriginaldata, d2, selection.width * selection.height * 4);
+		free(d1);
+		free(d2);
 	}
 	classUndo = false;
+	m->loading = false;
+	RedrawSurface(m);
+	
 }
 
-void ToggleFullscreen(GlobalParams* m) {
+void ToggleFullscreen(GlobalParams* m) { 
 	if (m->fullscreen) {
 		// disable fullscreen
 		SetWindowLong(m->hwnd, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
-
+		m->fullscreen = false; // to fix fullscreen "testing" issue with toolheight
 		SetWindowPlacement(m->hwnd, &m->wpPrev);
 		SetWindowPos(m->hwnd, NULL, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-		m->fullscreen = false;
+		
 		RedrawSurface(m);
 	}
 	else {
@@ -774,16 +1315,18 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	if (temp != m->hwnd) {
 		return;
 	}
+
 	if (m->fullscreen) {
 		while (ShowCursor(FALSE) >= 0); // Hide idle cursor in fullscreen
 	}
 
 	if ((GetKeyState(VK_ESCAPE) & 0x8000)) {
 		m->eyedroppermode = false;
+		m->isInCropMode = false;
 		RedrawSurface(m);
 	}
 
-	if ((GetKeyState(VK_SHIFT) & 0x8000) && wparam == 'Z') { // Eyedropper
+	if (((GetKeyState(VK_SHIFT) & 0x8000) && wparam == 'Z')&& m->drawmode) { // Eyedropper
 		m->eyedroppermode = true;
 		RedrawSurface(m);
 	}
@@ -798,29 +1341,18 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		RedrawSurface(m);
 		//Beep(1000, 400);
 		if (wparam >= '1' && wparam <= '9'){
-			PerformCasedBasedOperation(m, wparam - 0x31);
+			PerformCasedBasedOperation(m, wparam - 0x31, false);
 		}
 		if (wparam == '0') {
-			PerformCasedBasedOperation(m, 9);
+			PerformCasedBasedOperation(m, 9, false);
 		}
 		if (wparam == VK_OEM_MINUS) {
-			PerformCasedBasedOperation(m, 10);
+			PerformCasedBasedOperation(m, 10, false);
 		}
 		return;
 	}
 
-	if (wparam == 'F') {
-		PrepareOpenImage(m);
-		RedrawSurface(m);
-	}
 
-	if (wparam == VK_OEM_PLUS) { // WHY? (the plus sign or equals sign)
-		NewZoom(m, 1.25f, 2, true);
-	}
-	if (wparam == VK_OEM_MINUS) { // WHY? (the minus sign or dash sign)
-		NewZoom(m, 0.8f, 2, true);
-
-	}
 
 	if (wparam == VK_F11) {
 		ToggleFullscreen(m);
@@ -837,7 +1369,70 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 		}
 	}
 
+
+	if (wparam == 'F' && !m->isInCropMode) {
+		PrepareOpenImage(m);
+		RedrawSurface(m);
+	}
+
+
 	if (m->imgwidth < 1) {
+		return;
+	}
+
+
+
+
+	if (wparam == VK_OEM_PLUS) { // WHY? (the plus sign or equals sign)
+		NewZoom(m, 1.25f, 2, true);
+	}
+	if (wparam == VK_OEM_MINUS) { // WHY? (the minus sign or dash sign)
+		NewZoom(m, 0.8f, 2, true);
+
+	}
+
+	if (wparam == VK_LEFT) {
+		GoLeft(m);
+	}
+	if (wparam == VK_RIGHT) {
+		GoRight(m);
+	}
+
+	if (wparam == '1') {
+		zoomcycle(m, 1.0f);
+	}
+
+	if (wparam == '2') {
+		zoomcycle(m, 2.0f);
+	}
+	if (wparam == '3') {
+		zoomcycle(m, 0.5f);
+	}
+
+	if (wparam == '4') {
+		zoomcycle(m, 4.0f);
+	}
+
+	if (wparam == '5') {
+		autozoom(m);
+		RedrawSurface(m);
+	}
+
+	if (wparam == '6') {
+		zoomcycle(m, 0.25f);
+	}
+
+	if (wparam == '7') {
+		zoomcycle(m, 0.125f);
+	}
+
+	if (wparam == '8') {
+		//m->mscaler = 8.0f;
+		zoomcycle(m, 8.0f);
+	}
+
+
+	if (m->isInCropMode) {
 		return;
 	}
 
@@ -907,78 +1502,18 @@ void KeyDown(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 
 	//CheckKeys(m, wparam);
 
-	if (wparam == VK_LEFT) {
-		if (!m->loading && !m->halt && m->imgwidth>0) {
-			m->halt = true;
-			m->loading = true;
-
-			std::string k = GetPrevFilePath();
-			const char* npath = k.c_str();
-			//MessageBox(0, mpath, npath, MB_OKCANCEL);
-			if (k != "No") {
-				OpenImageFromPath(m, npath, true);
-			}
-			m->loading = false;
-			m->halt = false;
-		}
-		RedrawSurface(m);
-	}
-	if (wparam == VK_RIGHT) {
-		if (!m->loading && !m->halt && m->imgwidth > 0) {
-			m->halt = true;
-			m->loading = true;
-
-			const char* mpath = m->fpath.c_str();
-
-			std::string k = GetNextFilePath(mpath);
-			const char* npath = k.c_str();
-			//MessageBox(0, mpath, npath, MB_OKCANCEL);
-			if (k != "No") {
-				OpenImageFromPath(m, npath, true);
-			}
-			m->loading = false;
-			m->halt = false;
-		}
-		RedrawSurface(m);
-	}
-
-	if (wparam == '1') {
-		zoomcycle(m, 1.0f);
-	}
-
-	if (wparam == '2') {
-		zoomcycle(m, 2.0f);
-	}
-	if (wparam == '3') {
-		zoomcycle(m, 0.5f);
-	}
-
-	if (wparam == '4') {
-		zoomcycle(m, 4.0f);
-	}
-
-	if (wparam == '5') {
-		autozoom(m);
-		RedrawSurface(m);
-	}
-
-	if (wparam == '6') {
-		zoomcycle(m, 0.25f);
-	}
-
-	if (wparam == '7') {
-		zoomcycle(m, 0.125f);
-	}
-
-	if (wparam == '8') {
-		//m->mscaler = 8.0f;
-		zoomcycle(m, 8.0f);
-	}
 
 	MouseMove(m);
 }
 
 void MouseUp(GlobalParams* m) {
+	if (m->isInCropMode) {
+		m->isMovingTL = false;
+		m->isMovingTR = false;
+		m->isMovingBL = false;
+		m->isMovingBR = false;
+		return;
+	}
 	POINT pos;
 	GetCursorPos(&pos);
 	ScreenToClient(m->hwnd, &pos);
@@ -1010,16 +1545,24 @@ void MouseUp(GlobalParams* m) {
 		if (pos.x > m->actmenuX && pos.y > m->actmenuY && pos.x < (m->actmenuX + m->menuSX) && pos.y < (m->actmenuY + m->menuSY)) { // copied to if down
 
 			int selected = (pos.y - (m->actmenuY + 2)) / m->mH;
-			auto l = m->menuVector[selected].second;
-			l();
-			m->isMenuState = false;
+			if (selected < m->menuVector.size()) {
+				auto l = m->menuVector[selected].func;
+				if (l) {
+					l();
+					m->isMenuState = false;
+				}
+			}
+			
 			//Beep(selected *100, 100);
 		}
 	}
 	RedrawSurface(m);
 }
-
+bool aot = false;
 void RightDown(GlobalParams* m) {
+	if (m->isInCropMode) {
+		return;
+	}
 	if (m->eyedroppermode) {
 		return;
 	}
@@ -1037,18 +1580,24 @@ void RightDown(GlobalParams* m) {
 		return;
 	}
 
-	CloseToolbarWhenInactive(m, mPP);
+	CloseMenuWhenInactive(m, mPP);
 
 	if (m->drawmode) {
 		if ((mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom)) {// NOW, im putting it in the right click menu up thing to not rendeeer menu ACTUALLLY its right down below
 			m->drawtype = 0;
 			TurnOnDraw(m);
-			createUndoStep(m);
+			createUndoStep(m, true);
 		}
 	}
 }
 
+
 void RightUp(GlobalParams* m) {
+	if (m->isInCropMode) {
+		ConfirmCrop(m);
+		m->isInCropMode = false;
+		return;
+	}
 	if (m->eyedroppermode) {
 		return;
 	}
@@ -1068,84 +1617,84 @@ void RightUp(GlobalParams* m) {
 			return;
 		}
 	}
-
 	m->menuVector = {
 
 		{"Blank Image{s}",
 			[m]() -> bool {
+				m->isMenuState = false;
 				if (AllocateBlankImage(m, 0xFFFFFFFF)) {
 					ShowResizeDialog(m);
 				}
 				return true;
-			},
+			},0,0
 		},
 
 		{"Toggle Anti-alliasing{s}",
 			[m]() -> bool {
+				m->isMenuState = false;
 				m->smoothing = !m->smoothing;
 				return true;
-			},
+			},13,0
 		},
 
 		{"Undo (CTRL+Z)",
 			[m]() -> bool {
+				m->isMenuState = false;
 				UndoBus(m);
 				return true;
-			},
+			},26,0
 		},
 
 		{"Redo (CTRL+Y){s}",
 			[m]() -> bool {
+				m->isMenuState = false;
 				RedoBus(m);
 				return true;
-			},
+			},39,0
 		},
 
-		{"Resize Image [CTRL+R]",
+		{"Resize Image [CTRL+R]{s}",
 			[m]() -> bool {
+				m->isMenuState = false;
+				RedrawSurface(m);
 				ShowResizeDialog(m);
 				//ResizeImageToSize(m);
 				return true;
-			},
+			},52,0
+		},
+		{"Image Information{s}",
+			[m]() -> bool {
+				ShowMyInformation(m);
+				return true;
+			},13,13
+		},
+
+		{"Set Always On Top",
+			[m]() -> bool {
+				if (aot) {
+					SetWindowPos(m->hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+					aot = false;
+				}
+				else {
+					SetWindowPos(m->hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+					aot = true;
+				}
+				return true;
+			},26,13
 		},
 		
 	};
-
+	if (aot) {
+		m->menuVector[6].atlasX = 39;
+	}
 	m->menuX = pos.x;
 	m->menuY = pos.y;
 	m->isMenuState = true;
 
-	RedrawSurface(m);
 	//SelectClipRgn(m->hdc, NULL);
 }
 
-void Size(GlobalParams* m) {
-	if (m->scrdata) {
 
-		RECT ws = { 0 };
-		GetClientRect(m->hwnd, &ws);
-		m->width = ws.right - ws.left;
-		m->height = ws.bottom - ws.top;
-
-		if (m->width < 1) { m->width = 1; }
-		if (m->height < 1) { m->height = 1; }
-
-		m->scrdata = realloc(m->scrdata, m->width * m->height * 4);
-		m->toolbar_gaussian_data = realloc(m->toolbar_gaussian_data, m->width * m->toolheight * 4);
-
-		m->ith.resize(m->width);
-		m->itv.resize(m->height);
-
-		for (uint32_t i = 0; i < m->width; i++)
-			m->ith[i] = i;
-		for (uint32_t i = 0; i < m->height; i++)
-			m->itv[i] = i;
-
-		autozoom(m);
-
-		RedrawSurface(m);
-	}
-}
 
 void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 
@@ -1217,3 +1766,4 @@ void MouseWheel(GlobalParams* m, WPARAM wparam, LPARAM lparam) {
 	}
 
 }
+ 

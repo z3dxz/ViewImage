@@ -88,13 +88,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;Advapi32.lib;Comdlg32.lib;Shell32.lib;Ole32.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
     </Link>
@@ -107,15 +107,16 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;Advapi32.lib;Comdlg32.lib;Shell32.lib;Ole32.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
     </Link>
@@ -126,13 +127,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;Advapi32.lib;Comdlg32.lib;Shell32.lib;Ole32.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
     </Link>
@@ -145,21 +146,24 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>user32.lib;gdi32.lib;Advapi32.lib;Comdlg32.lib;Shell32.lib;Ole32.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>
       </AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="src\dialogcontrol.cpp" />
+    <ClCompile Include="src\effectdialog\brightnesscontrast.cpp" />
+    <ClCompile Include="src\effectdialog\gaussian.cpp" />
+    <ClCompile Include="src\resizedialog.cpp" />
     <ClCompile Include="src\events.cpp" />
     <ClCompile Include="src\imgload.cpp" />
     <ClCompile Include="src\leftrightlogic.cpp" />
@@ -168,9 +172,12 @@
     <ClCompile Include="src\starter.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="resource.h" />
     <ClInclude Include="resource.hpp" />
+    <ClInclude Include="src\effectdialog\headers\brightnesscontrast.h" />
+    <ClInclude Include="src\effectdialog\headers\gaussian.h" />
     <ClInclude Include="src\gaussian_blur_template.h" />
-    <ClInclude Include="src\headers\dialogcontrol.hpp" />
+    <ClInclude Include="src\headers\resizedialog.hpp" />
     <ClInclude Include="src\headers\events.hpp" />
     <ClInclude Include="src\headers\leftrightlogic.hpp" />
     <ClInclude Include="src\headers\ops.hpp" />
@@ -184,18 +191,31 @@
     <ResourceCompile Include="View Image.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="12iconmap.png" />
+    <Image Include="bitmap1.bmp" />
+    <Image Include="bitmap2.bmp" />
     <Image Include="checkerboard_pattern.png" />
     <Image Include="corner.png" />
+    <Image Include="cropicon.png" />
     <Image Include="edge.png" />
     <Image Include="face.png" />
     <Image Include="fullscreen_icon.bmp" />
     <Image Include="fullscreen_icon.png" />
+    <Image Include="icon2.ico" />
     <Image Include="iconbar.png" />
     <Image Include="iconbar_b.png" />
+    <Image Include="lock.bmp" />
+    <Image Include="lock_icon_i.ico" />
+    <Image Include="lock_mask.bmp" />
+    <Image Include="lock_mask.png" />
     <Image Include="maincorner.png" />
     <Image Include="sfbb_icon.ico" />
     <Image Include="toolshadow.png" />
     <Image Include="txt_atlas.png" />
+    <Image Include="unlock.bmp" />
+    <Image Include="unlockicon.ico" />
+    <Image Include="unlock_mask.bmp" />
+    <Image Include="unlock_mask.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="cursor1.cur" />

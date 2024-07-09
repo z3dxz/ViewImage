@@ -1,0 +1,38 @@
+
+uint32_t lerpltkwpotkoepk(uint32_t color1, uint32_t color2, float alpha)
+{
+	// Extract the individual color channels from the input values
+	uint8_t a1 = (color1 >> 24) & 0xFF;
+	uint8_t r1 = (color1 >> 16) & 0xFF;
+	uint8_t g1 = (color1 >> 8) & 0xFF;
+	uint8_t b1 = color1 & 0xFF;
+
+	uint8_t a2 = (color2 >> 24) & 0xFF;
+	uint8_t r2 = (color2 >> 16) & 0xFF;
+	uint8_t g2 = (color2 >> 8) & 0xFF;
+	uint8_t b2 = color2 & 0xFF;
+
+	float a1f = pow(((float)a1 / 255.0f), 2.2f);
+	float r1f = pow(((float)r1 / 255.0f), 2.2f);
+	float g1f = pow(((float)g1 / 255.0f), 2.2f);
+	float b1f = pow(((float)b1 / 255.0f), 2.2f);
+
+	float a2f = pow(((float)a2 / 255.0f), 2.2f);
+	float r2f = pow(((float)r2 / 255.0f), 2.2f);
+	float g2f = pow(((float)g2 / 255.0f), 2.2f);
+	float b2f = pow(((float)b2 / 255.0f), 2.2f);
+
+	// Calculate the lerped color values for each channel
+	float a = (1.0f - alpha) * a1f + alpha * a2f;
+	float r = (1.0f - alpha) * r1f + alpha * r2f;
+	float g = (1.0f - alpha) * g1f + alpha * g2f;
+	float b = (1.0f - alpha) * b1f + alpha * b2f;
+
+	uint8_t af = (int)(pow(a, 0.45f) * 255.0f);
+	uint8_t rf = (int)(pow(r, 0.45f) * 255.0f);
+	uint8_t gf = (int)(pow(g, 0.45f) * 255.0f);
+	uint8_t bf = (int)(pow(b, 0.45f) * 255.0f);
+
+	// Combine the lerped color channels into a single 32-bit value
+	return (af << 24) | (rf << 16) | (gf << 8) | bf;
+}

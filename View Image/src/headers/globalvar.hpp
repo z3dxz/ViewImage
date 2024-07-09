@@ -2,23 +2,39 @@
 #include <string>
 #include <vector>
 #include <Windows.h>
+#include <ft2build.h>
+#include <freetype/freetype.h>
 #include <functional>
 
+
+struct ToolbarButtonItem {
+	int indexX = 0;
+	std::string name;
+	bool isSeperator;
+};
+
+struct MenuItem {
+	std::string name; // has seperator in it
+	std::function<bool()> func;
+	int atlasX;
+	int atlasY;
+};
+
 struct UndoDataStruct {
-	uint32_t* image;
-	uint32_t* noannoimage;
+	uint32_t imageID;
+	uint32_t imageIDoriginal;
 	int width;
 	int height;
 };
 
-#define REAL_BIG_VERSION_BOOLEAN "2.4"
+#define REAL_BIG_VERSION_BOOLEAN "2.5Dv"
 
 struct GlobalParams {
+	std::vector<ToolbarButtonItem> toolbartable;
 
 	// deltatime
 	float ms_time = 0;
 
-	bool fontinit = false;
 	// the global window
 	HWND hwnd;
 	HDC hdc;
@@ -28,14 +44,21 @@ struct GlobalParams {
 	void* imgoriginaldata;
 	void* scrdata;
 	void* toolbar_gaussian_data;
+
+	void* imagepreview;
+	bool isImagePreview = false;
+
 	// images
 	unsigned char* toolbarData;
-	unsigned char* toolbarData_shadow;
-	unsigned char* mainToolbarCorner;
+	unsigned char* im;
 	unsigned char* fullscreenIconData;
+	unsigned char* cropImageData;
+	unsigned char* menu_icon_atlas;
 	
 	std::vector<UndoDataStruct> undoData;
 	int undoStep = 0;
+	int ProcessOfMakingUndoStep = 0;
+	std::string undofolder;
 
 	// strings
 	std::string fpath;
@@ -48,12 +71,15 @@ struct GlobalParams {
 	int imgwidth;
 	int imgheight;
 
-	int widthos;
+	int widthos; // for toolbar size
 	int heightos;
 	int channelos;
 
+	int dumpchannel; // UNUSED
+	int menu_atlas_SizeX;
+	int menu_atlas_SizeY;
+
 	// settings
-	int maxButtons = 12;
 	const int iconSize = 30; // the real width is 31 because 1 px divider
 	int toolheight = 43;
 
@@ -111,14 +137,14 @@ struct GlobalParams {
 	int mH = 25;
 
 	// draw menu
-	int drawMenuOffsetX = 393;
+	int drawMenuOffsetX = 0;
 	int drawMenuOffsetY = 0;
 
 	bool smoothing = true;
 
 	std::string fontsfolder;
 
-	std::vector<std::pair<std::string, std::function<bool()>>> menuVector;
+	std::vector<MenuItem> menuVector;
 
 	// drawing/annotating
 
@@ -132,8 +158,6 @@ struct GlobalParams {
 	float drawSize = 20;
 	float a_opacity = 1.0f;
 	float a_resolution = 30.0f;
-
-	bool isAnnotationCircleShown = false;
 
 	bool pinkTestCenter = false;
 
@@ -158,11 +182,45 @@ struct GlobalParams {
 
 	int mouseRightInitialCheckX;
 	int mouseRightInitialCheckY;
-	
+
+	bool tint = false;
+
+	// preloaded fonts
+
+	FT_Face SegoeUI;
+	FT_Face Verdana;
+	FT_Face OCRAExt;
+	FT_Face Tahoma;
+
+	float etime = 0; // USED FOR MEASURING TIME
+
+	// crop mode
+	bool isInCropMode = false;
+	float leftP = 0.0f;
+	float rightP = 1.0f;
+	float topP = 0.0f;
+	float bottomP = 1.0f;
+	bool CropHandleSelectTL = false;
+	bool CropHandleSelectTR = false;
+	bool CropHandleSelectBL = false;
+	bool CropHandleSelectBR = false;
+
+	bool isMovingTL = false;
+	bool isMovingTR = false;
+	bool isMovingBL = false;
+	bool isMovingBR = false;
+
+
+
+	bool isJoystick = false;
+	JOYINFOEX joyInfoEx;
+	UINT joystickID = JOYSTICKID1;
 };
 
 
 // mod list
-// drawing
-// resizing
-// rotating
+// drawing (does not change original)
+// resizing (does change original)
+// rotating (does change original)
+// effects (does not change original)
+// crop (does change original)

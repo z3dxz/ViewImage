@@ -195,6 +195,7 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 		m->loading = false;
 		return false;
 	}
+
 	// remember when I drew with the small brush and when I clicked blank it cleared the undo. yeah, the order, I switched it
 	m->undoData.clear();
 	m->undoStep = 0;
@@ -256,6 +257,7 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 }
 
 bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
+
 	m->undoData.clear();
 	m->undoStep = 0;
 	m->drawmode = false;
@@ -286,6 +288,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	//	free(m->imgannotate);
 	//}
 	// put thing here
+	//auto start = std::chrono::high_resolution_clock::now();
 
 	if (CheckIfStandardFile(kpath.c_str())) {
 		m->imgdata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
@@ -294,6 +297,10 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	else {
 		// no
 	}
+
+	//auto end = std::chrono::high_resolution_clock::now();
+	//std::chrono::duration<float, std::milli> duration = end - start;
+	//m->etime = duration.count();
 
 	if (!m->imgdata || !m->imgoriginaldata) {
 		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK | MB_ICONERROR);
@@ -356,5 +363,5 @@ void PrepareOpenImage(GlobalParams* m) {
 		//m->imgwidth = 0;
 		OpenImageFromPath(m, res, false);
 		m->shouldSaveShutdown = false;
-	}
+	} 
 }

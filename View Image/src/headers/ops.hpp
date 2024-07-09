@@ -8,7 +8,8 @@
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
-
+void DeleteTempFiles(GlobalParams* m);
+bool DeleteDirectory(const char* directoryPath);
 #pragma region Memory
 
 double remap(double value, double fromLow, double fromHigh, double toLow, double toHigh);
@@ -33,9 +34,15 @@ unsigned char* LoadImageFromResource(int resourceId, int& width, int& height, in
 void Print(GlobalParams* m);
 void rotateImage90Degrees(GlobalParams* m);
 
-int GetButtonInterval(GlobalParams* m);
-
+int GetLocationFromButton(GlobalParams* m, int index);
+int GetIndividualButtonPush(GlobalParams* m, int index);
 int getXbuttonID(GlobalParams* m, POINT mPos);
+
+void GetCropCoordinates(GlobalParams* m, uint32_t* outDistLeft, uint32_t* outDistRight, uint32_t* outDistTop, uint32_t* outDistBottom);
+void GetCropPercentagesFromCursor(GlobalParams* m, int cursorX, int cursorY, float* outX, float* outY);
+
+void ConfirmCrop(GlobalParams* m);
+
 float log_base_1_25(float x);
 
 float roundzoom(float z);
@@ -57,7 +64,6 @@ uint32_t lerp_gc(uint32_t color1, uint32_t color2, float alpha);
 
 void ResizeImageToSize(GlobalParams* m, int width, int height);
 
-
 // Gaussian function
 double gaussian(double x, double sigma);
 
@@ -68,6 +74,7 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels);
 #pragma endregion
 
+void gaussian_blur_B(uint32_t* input_buffer, uint32_t* output_buffer, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY);
 void gaussianBlurFFT(uint32_t* image, int height, int width, int kernelSize, double* kernel);
 
 uint32_t multiplyColor(uint32_t color, float multiplier);
