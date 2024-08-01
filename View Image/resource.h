@@ -18,6 +18,8 @@
 #define Gaussian                        136
 #define IDB_PNG1                        137
 #define CROPICON                        137
+#define DrawTextD                       138
+#define DrawTextDialog                  138
 #define WidthPBox                       1001
 #define HeightPBox                      1002
 #define parameters_dialog_baba          1003
@@ -34,14 +36,37 @@
 #define SLIDERBRIGHTNESS                1013
 #define SLIDERCONTRAST                  1014
 #define SLIDERGAUSSIAN                  1014
+#define text_static_control_1           1015
+#define IDC_EDIT1                       1016
+#define ActualDrawTextDialogBox         1016
+#define posXs                           1018
+#define posYs                           1019
+#define Xe                              1020
+#define pos_x_6                         1021
+#define IDC_BUTTON1                     1022
+#define SelectFontButton                1022
+#define Aa                              1023
+#define IDC_SLIDER3                     1025
+#define BevelAmountSlider               1025
+#define IDC_SLIDER4                     1026
+#define OutlineAmountSlider             1026
+#define IDC_BUTTON2                     1027
+#define ColorTextButton                 1027
+#define IDC_BUTTON3                     1028
+#define ColorOutlineButton              1028
+#define IDC_CHECK1                      1029
+#define ApplyAnnotationsLayerCheckboxDT 1029
+#define TextSizeSlider                  1030
+#define ColorTextBlock                  1031
+#define ColorOutlineBlock               1032
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        138
+#define _APS_NEXT_RESOURCE_VALUE        140
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1015
+#define _APS_NEXT_CONTROL_VALUE         1033
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

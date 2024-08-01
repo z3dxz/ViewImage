@@ -1,7 +1,7 @@
 #include "headers/brightnesscontrast.h"
 #include "../../resource.h"
 #include <Uxtheme.h>
-#include <dwmapi.h>
+//#include <dwmapi.h>
 
 static GlobalParams* m;
 
@@ -15,7 +15,7 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 int ShowBrightnessContrastDialog(GlobalParams* m0) {
     m = m0;
     // Create the main dialog
-    DialogBox(GetModuleHandle(0), MAKEINTRESOURCE(BrightnessContrast), m->hwnd, DialogProc);
+    DialogBox(GetModuleHandle(0), MAKEINTRESOURCE(BrightnessContrast), m->hwnd, (DLGPROC)DialogProc);
 
     return 0;
 }
@@ -91,7 +91,10 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
         m->isImagePreview = true;
 
         BOOL enable = TRUE;
-        DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
+        //DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
+        if (!DwmDarken(hwnd)) {
+            // windows XP
+        }
 
         bslider = GetDlgItem(hwnd, SLIDERBRIGHTNESS);
         cslider = GetDlgItem(hwnd, SLIDERCONTRAST);
@@ -122,11 +125,6 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 
         return TRUE;
     }
-    case WM_KEYDOWN: {
-        Beep(500, 500);
-        RedrawSurface(m);
-        break;
-    }
    
     case WM_COMMAND: {
         switch (LOWORD(wparam)) {
@@ -136,7 +134,7 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
 
             m->isImagePreview = false;
             if (m->imagepreview) {
-                free(m->imagepreview);
+                FreeData(m->imagepreview);
             }
             EndDialog(hwnd, IDCANCEL);
             break;
@@ -144,7 +142,7 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
         case IDCANCEL: {
             m->isImagePreview = false;
             if (m->imagepreview) {
-                free(m->imagepreview);
+                FreeData(m->imagepreview);
             }
             EndDialog(hwnd, IDCANCEL);
         }
@@ -153,7 +151,7 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
     case WM_CLOSE: {
         m->isImagePreview = false;
         if (m->imagepreview) {
-            free(m->imagepreview);
+            FreeData(m->imagepreview);
         }
         EndDialog(hwnd, IDCANCEL);
     }

@@ -41,7 +41,7 @@
          triggers the implementation, do:
 
             #define STBIR_MALLOC(size,context) ...
-            #define STBIR_FREE(ptr,context)   ...
+            #define STBIR_free(ptr,context)   ...
 
          Each resize function makes exactly one call to malloc/free, so to use
          temp memory, store the temp memory in the context and return that.
@@ -400,7 +400,7 @@ STBIRDEF int stbir_resize_region(const void* input_pixels, int input_w, int inpu
 #include <stdlib.h>
 // use comma operator to evaluate c, to avoid "unused parameter" warnings
 #define STBIR_MALLOC(size,c) ((void)(c), malloc(size))
-#define STBIR_FREE(ptr,c)    ((void)(c), free(ptr))
+#define STBIR_free(ptr,c)    ((void)(c), FreeData(ptr))
 #endif
 
 #ifndef _MSC_VER
@@ -2454,7 +2454,7 @@ static int stbir__resize_arbitrary(
         edge_horizontal, edge_vertical,
         colorspace, extra_memory, memory_required);
 
-    STBIR_FREE(extra_memory, alloc_context);
+    STBIR_free(extra_memory, alloc_context);
 
     return result;
 }

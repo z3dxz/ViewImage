@@ -42,6 +42,12 @@
     <ClCompile Include="src\effectdialog\gaussian.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\special\sfbb_support.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\effectdialog\drawtext.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\stb_image.h">
@@ -84,6 +90,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\effectdialog\headers\gaussian.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\special\sfbb_support.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\effectdialog\headers\drawtext.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

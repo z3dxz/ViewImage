@@ -88,6 +88,7 @@ struct GlobalParams {
 	bool shouldSaveShutdown = false;
 
 	bool loading = false;
+	bool deletingtemporaryfiles = false;
 
 	bool halt = false;
 
@@ -102,10 +103,10 @@ struct GlobalParams {
 	float iLocY = 0; // Y Position
 	float mscaler = 1.0f; // Global zoom
 
-	int CoordLeft;
-	int CoordTop;
-	int CoordRight;
-	int CoordBottom;
+	int CoordLeft = 0;
+	int CoordTop = 0;
+	int CoordRight = 0;
+	int CoordBottom = 0;
 	
 	// mouse stuff
 		bool lock = true;
@@ -139,6 +140,8 @@ struct GlobalParams {
 	// draw menu
 	int drawMenuOffsetX = 0;
 	int drawMenuOffsetY = 0;
+
+	bool IsLastMouseDownWhenOverMenu = false;
 
 	bool smoothing = true;
 
@@ -210,6 +213,10 @@ struct GlobalParams {
 	bool isMovingBL = false;
 	bool isMovingBR = false;
 
+	// For WASD Protection ONLY
+	float TransferWASDMoveMomentiumXIntArithmetic = 0;
+	float TransferWASDMoveMomentiumYIntArithmetic = 0;
+	bool SetLastMouseForWASDInputCaptureProtectionLock = false;
 
 
 	bool isJoystick = false;
@@ -223,4 +230,7 @@ struct GlobalParams {
 // resizing (does change original)
 // rotating (does change original)
 // effects (does not change original)
+	// brightness contrast
+	// gaussian
+	// invert
 // crop (does change original)

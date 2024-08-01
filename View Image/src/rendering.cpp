@@ -6,7 +6,6 @@
 #include <shlwapi.h>
 #include <wincodec.h>
 
-
 // Freetype Globals
 FT_Library ft;
 FT_Face* currentFace;
@@ -101,7 +100,7 @@ FT_Face LoadFont(GlobalParams* m, std::string fontA) {
 	std::string font_s = (m->fontsfolder + "\\" + fontA);
 	FT_Face k;
 	if (FT_New_Face(ft, font_s.c_str(), 0, &k)) {
-		std::string er = "Failed to load font: " + fontA;
+		std::string er = "Failed to load font: " + fontA + "\nYou may need to install this on your system";
 		MessageBox(m->hwnd, er.c_str(), "Error Loading Font", MB_OK | MB_ICONERROR);
 		return 0;
 	}
@@ -161,13 +160,13 @@ void SwitchFont(FT_Face& font) {
 	currentFace = &font;
 }
 
-int PlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
+int ActuallyPlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem, int bufwidth, int bufheight, void* fromBuffer) {
 	if (!*currentFace) {
 		return 0;
 	}
 	FT_Set_Pixel_Sizes(*currentFace, 0, size);
 
-	if (m->width < 100) return 0;
+	if (bufwidth < 100) return 0;
 	const char* text = inputstr;
 
 	FT_GlyphSlot g = (*currentFace)->glyph;
@@ -197,15 +196,17 @@ int PlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, 
 
 		for (int y = 0; y < bitmap->rows; ++y) {
 			for (int x = 0; x < bitmap->width; ++x) {
-				int pixelIndex = (y)*m->width + (penX + x);
+				int pixelIndex = (y)*bufwidth + (penX + x);
 				unsigned char pixelValue = bitmap->buffer[y * bitmap->width + x];
 				uint32_t ptx = locX + penX + x;
 				uint32_t pty = baseY - (bitmap->rows - y) + maxDescender; // Adjusted Y-position calculation
 
-				uint32_t* memoryPath = GetMemoryLocation(mem, ptx, pty, m->width, m->height);
-				uint32_t existingColor = *memoryPath;
-
-				*GetMemoryLocation(mem, ptx, pty, m->width, m->height) = lerp(existingColor, color, ((float)pixelValue / 255.0f));
+				uint32_t* memoryPath = GetMemoryLocation(mem, ptx, pty, bufwidth, bufheight);
+				uint32_t* memoryPathFrom = GetMemoryLocation(fromBuffer, ptx, pty, bufwidth, bufheight);
+				uint32_t existingColor = *memoryPathFrom;
+				if (ptx >= 0 && pty >= 0 && ptx < bufwidth && pty < bufheight) {
+					*GetMemoryLocation(mem, ptx, pty, bufwidth, bufheight) = lerp(existingColor, color, ((float)pixelValue / 255.0f));
+				}
 			}
 		}
 
@@ -219,71 +220,16 @@ int PlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, 
 	return 1;
 }
 
-/*
-
-int PlaceString_old_legacy(GlobalParams* m, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
-
-	if (m->width < 100) return 0;
-	const char* text = inputstr;
-
-	FT_GlyphSlot g = face->glyph;
-	int penX = 0;
-
-	for (const char* p = text; *p; ++p) {
-		if (FT_Load_Char(face, *p, FT_LOAD_RENDER))
-			continue;
-
-		FT_Bitmap* bitmap = &g->bitmap;
-
-
-		int yOffset = (g->metrics.horiBearingY - g->bitmap_top) >> 6;
-
-		int maxGlyphHeight = 0;
-		int maxDescender = 0;
-		if (g->bitmap.rows > maxGlyphHeight)
-			maxGlyphHeight = g->bitmap.rows;
-
-		int descender = (g->metrics.height >> 6) - yOffset;
-		if (descender > maxDescender)
-			maxDescender = descender;
-
-		for (int y = 0; y < bitmap->rows; ++y) {
-			for (int x = 0; x < bitmap->width; ++x) {
-				int pixelIndex = (y)*m->width + (penX + x);
-				unsigned char pixelValue = bitmap->buffer[y * bitmap->width + x];
-				uint32_t ptx = locX + penX + x;
-				uint32_t pty = locY + (face->size->metrics.ascender >> 6) - (bitmap->rows - y) + maxDescender;
-
-				uint32_t* memoryPath = GetMemoryLocation(m->scrdata, ptx, pty, m->width, m->height);
-				uint32_t existingColor = *memoryPath;
-
-				*GetMemoryLocation(mem, ptx, pty, m->width, m->height) = lerp(existingColor, color, ((float)pixelValue / 255.0f));
-			}
-		}
-
-		penX += g->advance.x >> 6;
-	}
-
-
-	return true;
-
+int PlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem) {
+	bool e = ActuallyPlaceString(m, size, inputstr, locX, locY, color, mem, m->width, m->height, mem);
+	return e;
 }
-*/
-/*
 
-void PlaceNewFont(GlobalParams* m, std::string text, int x, int y, std::string FontA, int size, uint32_t color) {
-
-	if (m->fontinit) {
-		FT_Done_Face(face);
-		FT_Done_FreeType(ft);
-		m->fontinit = false;
-	}
-	bool status = InitFont(m, FontA, size);
-	if (status) {
-		PlaceString(m, text.c_str(), x, y, color, m->scrdata);
-	}
+int PlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem, int bufwidth, int bufheight, void* fromBuffer) {
+	bool e = ActuallyPlaceString(m, size, inputstr, locX, locY, color, mem, bufwidth, bufheight, fromBuffer);
+	return e;
 }
-*/
+
 
 
 void dDrawFilledRectangle(void* mem, int kwidth, int kheight, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
@@ -299,9 +245,6 @@ void dDrawFilledRectangle(void* mem, int kwidth, int kheight, int xloc, int yloc
 		}
 	}
 }
-
-// sage
-// egas
 
 void dDrawRectangle(void* mem, int kwidth, int kheight, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
 	for (int y = 0; y < height; y++) {
@@ -369,13 +312,13 @@ void dDrawRoundedRectangle(void* mem, int kwidth, int kheight, int xloc, int ylo
 	}
 }
 
-bool paintBG = true;
-
 // MULTITHREADING!!!!!
 // https://www.youtube.com/watch?v=46ddlUImiQA
 //*********************************************
 
-void PlaceImageNN(GlobalParams* m, void* memory, bool invert) {
+
+void PlaceImageNN(GlobalParams* m, void* memory, bool invert, POINT p) {
+
 	const float inv_mscaler = 1.0f / m->mscaler;
 	const int32_t imgwidth = m->imgwidth;
 	const int32_t imgheight = m->imgheight;
@@ -383,45 +326,83 @@ void PlaceImageNN(GlobalParams* m, void* memory, bool invert) {
 
 	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), [&](uint32_t y) {
 		for (uint32_t x : m->ith) {
+
+			uint32_t bkc = 0x111111;
+			// bkc
+			if (y > m->toolheight || !(CanRenderToolbarMacro)) {
+
+				if (((x / 9) + (y / 9)) % 2 == 0) {
+					bkc = 0x121212;
+				}
+				else {
+					bkc = 0x0C0C0C;
+				}
+			}
+
 			int32_t offX = (((int32_t)m->width - (int32_t)(imgwidth * m->mscaler)) / 2) + m->iLocX;
 			int32_t offY = (((int32_t)m->height - (int32_t)(imgheight * m->mscaler)) / 2) + m->iLocY;
 
 			int32_t ptx = (x - offX) * inv_mscaler;
 			int32_t pty = (y - offY) * inv_mscaler;
 
+			uint32_t doColor = bkc;
 			if (ptx < imgwidth && pty < imgheight && ptx >= 0 && pty >= 0 &&
-				x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
+				x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) { // check if image is within it's coordinates
 				uint32_t c = *GetMemoryLocation(memory, ptx, pty, imgwidth, imgheight);
 
 				int alpha = (c >> 24) & 255;
-				uint32_t doColor = c;
-				if (alpha != 255) {
-					uint32_t existing = *GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
-					doColor = lerp(existing, c, static_cast<float>(alpha) / 255.0f);
+				if (alpha == 255) {
+					doColor = c;
 				}
-				*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = doColor;
+				else if (alpha == 0) {
+					// still bkc
+				}
+				else {
+					doColor = lerp(bkc, c, static_cast<float>(alpha) / 255.0f);
+				}
 			}
+			*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = doColor;
 		}
 		});
 }
-
 
 bool followsPattern(int number) {
 	double logBase2 = log2(number / 100.0);
 	return logBase2 == floor(logBase2);
 }
 
-void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
+
+
+void PlaceImageBI(GlobalParams* m, void* memory, bool invert, POINT p) {
+
+
+	//auto start = std::chrono::high_resolution_clock::now();
+
 	bool doesfollow = false;
 	if (followsPattern(m->mscaler * 100)) {
 		doesfollow = true;
-	} // OPTIMIZATION
+	}
+
 	const int margin = m->fullscreen ? 0 : 2;
 	const float inv_mscaler = 1.0f / m->mscaler;
 	const int32_t imgwidth_minus_1 = m->imgwidth - 1;
 	const int32_t imgheight_minus_1 = m->imgheight - 1;
+
 	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), [&](uint32_t y) {
 		for (uint32_t x : m->ith) {
+
+			uint32_t bkc = 0x111111;
+			// bkc
+			if (y > m->toolheight || !(CanRenderToolbarMacro)) {
+
+				if (((x / 9) + (y / 9)) % 2 == 0) {
+					bkc = 0x121212;
+				}
+				else {
+					bkc = 0x0C0C0C;
+				}
+			}
+
 			int32_t offX = (((int32_t)m->width - (int32_t)(m->imgwidth * m->mscaler)) / 2) + m->iLocX;
 			int32_t offY = (((int32_t)m->height - (int32_t)(m->imgheight * m->mscaler)) / 2) + m->iLocY;
 
@@ -433,7 +414,7 @@ void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 				pty = (y - offY) * inv_mscaler;
 			}
 
-			// 
+			uint32_t doColor = bkc;
 
 			if (ptx < imgwidth_minus_1 && pty < imgheight_minus_1 && ptx >= 0 && pty >= 0 && x >= margin && y >= margin && y < m->height - margin && x < m->width - margin) {
 				int32_t ptx_int = static_cast<int32_t>(ptx);
@@ -446,19 +427,33 @@ void PlaceImageBI(GlobalParams* m, void* memory, bool invert) {
 				uint32_t c01 = *GetMemoryLocation(memory, ptx_int + 1, pty_int, m->imgwidth, m->imgheight);
 				uint32_t c10 = *GetMemoryLocation(memory, ptx_int, pty_int + 1, m->imgwidth, m->imgheight);
 				uint32_t c11 = *GetMemoryLocation(memory, ptx_int + 1, pty_int + 1, m->imgwidth, m->imgheight);
+				
+				if (((c00 >> 24) & 0xFF) != 0 || ((c01 >> 24) & 0xFF) != 0 || ((c10 >> 24) & 0xFF) != 0 || ((c11 >> 24) & 0xFF) != 0) {
+					uint32_t placeColor = lerp(lerp(c00, c01, ptx_frac), lerp(c10, c11, ptx_frac), pty_frac);
 
-				// Bilinear interpolation
-				uint32_t doColor = lerp(lerp(c00, c01, ptx_frac), lerp(c10, c11, ptx_frac), pty_frac);
-				int alpha = (doColor >> 24) & 255;
-				if (alpha != 255) {
-					uint32_t existing = *GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
-					doColor = lerp(existing, doColor, static_cast<float>(alpha) / 255.0f);
+					int alpha = (placeColor >> 24) & 255;
+					if (alpha == 255) {
+						doColor = placeColor;
+					}
+					else if (alpha == 0) {
+						// still bkc
+					}
+					else {
+						doColor = lerp(bkc, placeColor, static_cast<float>(alpha) / 255.0f);
+					}
 				}
-				*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = doColor;
 			}
+			*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = doColor;
 		}
-		});
+	});
+
+	//auto end = std::chrono::high_resolution_clock::now();
+	//std::chrono::duration<float, std::milli> duration = end - start;
+	//float etime = duration.count();
+	//m->etime = etime;
 }
+
+
 
 void RenderToolbarIcon(GlobalParams* m, int index, int locationX, void* data, uint32_t color, uint32_t selectedColor) {
 	ToolbarButtonItem* item = &m->toolbartable[index];
@@ -567,8 +562,7 @@ void RenderToolbar(GlobalParams* m) {
 		
 		
 		// Render the toolbar
-		
-		
+		// 
 		//BLUR FOR TOOLBAR
 		
 		if (m->CoordTop <= m->toolheight) {
@@ -623,7 +617,7 @@ void RenderToolbar(GlobalParams* m) {
 			dDrawFilledRectangle(m->scrdata, m->width, m->height, (GetLocationFromButton(m, in) + 2) + 1, 4, m->iconSize+5 - 2, 1, 0xFF8080, 0.2f);
 			dDrawFilledRectangle(m->scrdata, m->width, m->height, (GetLocationFromButton(m, in) + 2), 5, m->iconSize+5, m->toolheight - 10, 0xFF8080, 0.2f);
 			dDrawFilledRectangle(m->scrdata, m->width, m->height, (GetLocationFromButton(m, in) + 2) + 1, (m->toolheight - 5), m->iconSize - 2, 1, 0xFF8080, 0.2f);
-	
+			
 			//-- The outline wb border when selecting the buttons
 			dDrawRoundedRectangle(m->scrdata, m->width, m->height, (GetLocationFromButton(m, in) +2), 4, m->iconSize+5, m->toolheight - 8, 0xFFFFFF, 0.2f);
 			dDrawRoundedRectangle(m->scrdata, m->width, m->height, (GetLocationFromButton(m, in) + 2)-1, 3, m->iconSize+5 +2, m->toolheight - 6, 0x000000, 1.0f);
@@ -713,6 +707,14 @@ void ResetCoordinates(GlobalParams* m) {
 		m->CoordBottom = (m->height / 2) - (-m->iLocY) + (int)((((float)m->imgheight / 2.0f)) * m->mscaler);
 
 	}
+	else {
+
+		m->CoordLeft = 0;
+		m->CoordTop = 0;
+
+		m->CoordRight = 0;
+		m->CoordBottom = 0;
+	}
 }
 
 void DrawMenuIcon(GlobalParams* m, int locationX, int locationY, int atlasX, int atlasY) {
@@ -756,7 +758,8 @@ void DrawMenu(GlobalParams* m) { // render menu draw menu
 
 	int selected = (mp.y-(posY+2))/mH;
 	if (selected < m->menuVector.size()) {
-		if (mp.x > m->actmenuX && mp.y > m->actmenuY && mp.x < (m->actmenuX + m->menuSX) && mp.y < (m->actmenuY + m->menuSY)) {
+		if (IfInMenu(mp, m)) {
+		//if (mp.x > m->actmenuX && mp.y > m->actmenuY && mp.x < (m->actmenuX + m->menuSX) && mp.y < (m->actmenuY + m->menuSY)) {
 			int hoverLocX = posX + 4;
 			int hoverLocY = posY + 4 + ((mH)*selected);
 			int hoverSizeX = miX - 8;
@@ -798,13 +801,16 @@ void RenderBK(GlobalParams* m, const POINT& p) {
 					uint32_t bkc = 0x111111;
 					// bkc
 					if (y > m->toolheight || !(CanRenderToolbarMacro)) {
+
 						if (((x / 9) + (y / 9)) % 2 == 0) {
 							bkc = 0x121212;
 						}
 						else {
 							bkc = 0x0C0C0C;
 						}
+
 					}
+
 
 					*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = bkc;
 				//}
@@ -855,11 +861,10 @@ void DrawDrawModeMenu(GlobalParams* m){
 		m->drawMenuOffsetX = 0;
 		m->drawMenuOffsetY = m->height - 40;
 		sizeCx = m->width;
-
-		boxBlur(GetMemoryLocation(m->scrdata, 0, m->height - 40, m->width, m->height), m->width, 40, 15);
+		
+		boxBlur(GetMemoryLocation(m->scrdata, 0, m->height - 40, m->width, m->height), m->width, 40, 15, 2);
 	}
 
-	
 
 	// draw outline
 	dDrawRectangle(m->scrdata, m->width, m->height, m->drawMenuOffsetX, m->drawMenuOffsetY, sizeCx, 42, 0xFFFFFF, 0.3f);
@@ -925,11 +930,11 @@ void DrawDrawModeMenu(GlobalParams* m){
 	float highlightOpacity1 = 0.3f;
 	float highlightOpacity2 = 0.3f;
 
-	if ((mp.x > slider1begin && mp.x < slider1end) && (mp.y > sliderYb && mp.y < sliderYe) || m->slider1mousedown) {
+	if (CheckIfMouseInSlider1(mp, m, slider1begin, slider1end, sliderYb, sliderYe) || m->slider1mousedown) {
 		highlightOpacity1 = 0.45f;
 	}
 
-	if ((mp.x > slider2begin && mp.x < slider2end) && (mp.y > sliderYb && mp.y < sliderYe) || m->slider2mousedown) {
+	if (CheckIfMouseInSlider2(mp, m, slider2begin, slider2end, sliderYb, sliderYe) || m->slider2mousedown) {
 		highlightOpacity2 = 0.45f;
 	}
 	//------------------------------------------------------------------------------------------------------------------------------
@@ -958,15 +963,13 @@ void UpdateBuffer(GlobalParams* m) {
 }
 
 void Tint(GlobalParams* m) {
-	std::for_each(std::execution::par, m->itv.begin(), m->itv.end(), // FOR TINTING ONLY
-		[&](uint32_t y) {
-			std::for_each(std::execution::par, m->ith.begin(), m->ith.end(),
-			[&](uint32_t x) {
+	for(int y=0; y<m->height; y++) {
+		for (int x = 0; x< m->width; x++) {
 					if (((x) + (y)) % 2 == 0) {
 						*GetMemoryLocation(m->scrdata, x, y, m->width, m->height) = 0x000000;
 					}
-				});
-		});
+				}
+		}
 }
 
 void RenderCropButton(GlobalParams* m, int px, int py, bool invertX, bool invertY, bool selected) {
@@ -1069,23 +1072,14 @@ void RenderCropGUI(GlobalParams* m) {
 
 }
 
-
-
-void RedrawSurface(GlobalParams* m, bool onlyImage) {
-
-	//auto start = std::chrono::high_resolution_clock::now();
-	//auto end = std::chrono::high_resolution_clock::now();
-	//std::chrono::duration<float, std::milli> duration = end - start;
+void RedrawSurface(GlobalParams* m, bool onlyImage, bool doesManualClip) {
+	if (!doesManualClip) {
+		SelectClipRgn(m->hdc, NULL);
+	}
 	if (m->sleepmode && (!m->isImagePreview)) {
 		return;
 	}
 	if (m->width < 20) { return; }
-
-
-	if (GetKeyState('L') & 0x8000 && GetKeyState('P') & 0x8000 && GetKeyState('M') & 0x8000 && GetKeyState(VK_RCONTROL) && 0x8000) {
-		// DEBUG: Turn off background placement
-		paintBG = !paintBG;
-	}
 
 	POINT p;
 	GetCursorPos(&p);
@@ -1098,14 +1092,6 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 		ResetCoordinates(m);
 	}
 
-	// render the background
-	if (paintBG) {
-		RenderBK(m, p);
-		
-	}
-
-	// render the image56
-	//if (!m->loading) {
 
 	void* drawingbuffer = m->imgdata;
 	if (m->isImagePreview) {
@@ -1114,27 +1100,24 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 
 	if (drawingbuffer) {
 		if ((m->smoothing && ((!m->mouseDown) || m->drawmode)) && !m->isInCropMode) {
-			PlaceImageBI(m, drawingbuffer, true);
+			PlaceImageBI(m, drawingbuffer, true, p);
 		}
 		else {
-			PlaceImageNN(m, drawingbuffer, true);
-		}
-
-		if (m->shouldSaveShutdown) {
-			//PlaceImageBI(m, m->img, false);
+			PlaceImageNN(m, drawingbuffer, true, p);
 		}
 	}
 	else if (m->imgwidth > 1) {
 		MessageBox(m->hwnd, "Failed to obtain drawing buffer", "Error", MB_OK | MB_ICONERROR);
-	}
+		exit(0);
+	} else {
+		RenderBK(m, p);
+	} 
 
 
 	// draw 1px frame
 	if (!m->isInCropMode) {
 		DrawFrame(m, 0x000000, m->CoordLeft, m->CoordRight, m->CoordTop, m->CoordBottom);
 	}
-
-	
 
 	//dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->CoordLeft, m->CoordTop, wFrame, hFrame, 0x808080, 1.0f);
 
@@ -1151,13 +1134,12 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 		RenderToolbarShadow(m);
 	}
 
-
-	if (m->drawmode && (!onlyImage) && (((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) || m->drawMenuOffsetY > 1)) {
-		DrawDrawModeMenu(m);
+	bool shouldIDrawTheDrawingToolbar = !onlyImage;
+	if (m->drawMenuOffsetY > m->toolheight) {
+		shouldIDrawTheDrawingToolbar = true;
 	}
-
-	if (m->isMenuState) {
-		DrawMenu(m);
+	if (m->drawmode && (shouldIDrawTheDrawingToolbar) && (((!m->fullscreen && m->height >= 250) || p.y < m->toolheight) || m->drawMenuOffsetY > 1)) {
+		DrawDrawModeMenu(m);
 	}
 
 
@@ -1189,6 +1171,10 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 		RenderCropGUI(m);
 	}
 
+
+	if (m->isMenuState) {
+		DrawMenu(m);
+	}
 	// draw test circle
 	/*
 	
@@ -1200,9 +1186,10 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 	*/
 	
 	//InitFont(m->hwnd, "segoeui.TTF", 14); // why did I even put this here? it just causes a memory leak and does nothing
+	
+	 // FOR DEBUG
 	/*
-	* // FOR DEGBUG
-	uint32_t randc = ((uint32_t)rand() << 16) | (uint32_t)rand();;
+	* uint32_t randc = ((uint32_t)rand() << 16) | (uint32_t)rand();;
 		for (int y = 0; y < m->height; y++) {
 			for (int x = 0; x < m->width; x++) {
 				uint32_t* memloc = GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
@@ -1211,8 +1198,7 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 		}
 	*/
 	
-	 
-	if (m->tint) {
+	if (m->tint || m->deletingtemporaryfiles) {
 		Tint(m);
 	}
 
@@ -1220,11 +1206,15 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 		SwitchFont(m->SegoeUI);
 		PlaceString(m, 20, "Loading", 12, m->toolheight + 12, 0x000000, m->scrdata);
 		PlaceString(m, 20, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata);
-
 	}
 
-	//float etime = duration.count();
-	
+	if (m->deletingtemporaryfiles) {
+		SwitchFont(m->OCRAExt);
+		PlaceString(m, 30, "-- Maintenance --", 33, 50, 0xFFFFFF, m->scrdata);
+		PlaceString(m, 50, "Deleting temporary files", 33, 100, 0xFFFFFF, m->scrdata);
+	}
+
+
 	// debug mode
 
 	SwitchFont(m->SegoeUI);
@@ -1234,6 +1224,7 @@ void RedrawSurface(GlobalParams* m, bool onlyImage) {
 		PlaceString(m, 16, debug, 12, m->toolheight + 8, 0x808080, m->scrdata);
 
 	}
+
 
 	// update buffer
 	UpdateBuffer(m);

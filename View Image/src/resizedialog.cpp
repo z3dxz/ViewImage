@@ -1,7 +1,7 @@
 #include "headers/resizedialog.hpp"
 #include "../resource.h"
 #include <Uxtheme.h>
-#include <dwmapi.h>
+//#include <dwmapi.h>
 
 GlobalParams* m;
 
@@ -15,7 +15,7 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
 int ShowResizeDialog(GlobalParams* m0){
     m = m0;
     // Create the main dialog
-    DialogBox(GetModuleHandle(0), MAKEINTRESOURCE(Resize), m->hwnd, ResizeDialogProc);
+    DialogBox(GetModuleHandle(0), MAKEINTRESOURCE(Resize), m->hwnd, (DLGPROC)ResizeDialogProc);
 
     return 0;
 }
@@ -122,8 +122,10 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         SendMessage(hWidthEdit, EM_SETSEL, 0, -1);
 
         BOOL enable = TRUE;
-        DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
-
+        //DwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
+        if (!DwmDarken(hwnd)) {
+            // windows XP
+        }
 
         return FALSE;
     }

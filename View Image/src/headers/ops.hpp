@@ -8,9 +8,34 @@
 #include "../stb_image.h"
 #include "../stb_image_write.h"
 
+inline void FreeDatac(void*& b) {
+	if (b) {
+		free(b);
+		b = nullptr;
+	}
+}
+#define FreeData(x) \
+	FreeDatac((void*&)x)
+		
+
+bool DwmDarken(HWND hwnd);
+
 void DeleteTempFiles(GlobalParams* m);
 bool DeleteDirectory(const char* directoryPath);
 #pragma region Memory
+
+
+#define IfInMenu(pos, m) \
+	((pos.x > m->actmenuX && pos.y > m->actmenuY && pos.x < (m->actmenuX + m->menuSX) && pos.y < (m->actmenuY + m->menuSY)))
+
+#define IsInImage(mPP, m) \
+	(mPP.y > m->toolheight && mPP.x >= m->CoordLeft && mPP.y > m->CoordTop && mPP.x < m->CoordRight && mPP.y < m->CoordBottom)
+
+#define CheckIfMouseInSlider1(mPP, m, slider1begin, slider1end, sliderYb, sliderYe) \
+	((mPP.x > slider1begin && mPP.x < slider1end) && (mPP.y > sliderYb && mPP.y < sliderYe))
+
+#define CheckIfMouseInSlider2(mPP, m, slider2begin, slider2end, sliderYb, sliderYe) \
+	((mPP.x > slider2begin && mPP.x < slider2end) && (mPP.y > sliderYb && mPP.y < sliderYe))
 
 double remap(double value, double fromLow, double fromHigh, double toLow, double toHigh);
 #define GetMemoryLocation(start, x, y, widthfactor, heightfactor) \
@@ -67,7 +92,7 @@ void ResizeImageToSize(GlobalParams* m, int width, int height);
 // Gaussian function
 double gaussian(double x, double sigma);
 
-void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize);
+void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize, int mode);
 // Gaussian blur function
 void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX = 0, uint32_t offY = 0);
 

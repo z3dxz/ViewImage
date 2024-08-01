@@ -24,13 +24,13 @@ ABOUT:
 BUILDING:
 
    You can #define STBIW_ASSERT(x) before the #include to avoid using assert.h.
-   You can #define STBIW_MALLOC(), STBIW_REALLOC(), and STBIW_FREE() to replace
+   You can #define STBIW_MALLOC(), STBIW_REALLOC(), and STBIW_free() to replace
    malloc,realloc,free.
    You can #define STBIW_MEMMOVE() to replace memmove()
    You can #define STBIW_ZLIB_COMPRESS to use a custom zlib-style compress function
    for PNG compression (instead of the builtin one), it must have the following signature:
    unsigned char * my_compress(unsigned char *data, int data_len, int *out_len, int quality);
-   The returned data will be freed with STBIW_FREE() (free() by default),
+   The returned data will be freed with STBIW_free() (free() by default),
    so it must be heap allocated with STBIW_MALLOC() (malloc() by default),
 
 UNICODE:
@@ -228,7 +228,7 @@ STBIWDEF void stbi_flip_vertically_on_write(int flip_boolean);
 #ifndef STBIW_MALLOC
 #define STBIW_MALLOC(sz)        malloc(sz)
 #define STBIW_REALLOC(p,newsz)  realloc(p,newsz)
-#define STBIW_FREE(p)           free(p)
+#define STBIW_free(p)           free(p)
 #endif
 
 #ifndef STBIW_REALLOC_SIZED
@@ -793,7 +793,7 @@ static int stbi_write_hdr_core(stbi__write_context* s, int x, int y, int comp, f
 
         for (i = 0; i < y; i++)
             stbiw__write_hdr_scanline(s, x, comp, scratch, data + comp * x * (stbi__flip_vertically_on_write ? y - 1 - i : i));
-        STBIW_FREE(scratch);
+        STBIW_free(scratch);
         return 1;
     }
 }
@@ -836,7 +836,7 @@ STBIWDEF int stbi_write_hdr(char const* filename, int x, int y, int comp, const 
 
 #define stbiw__sbpush(a, v)      (stbiw__sbmaybegrow(a,1), (a)[stbiw__sbn(a)++] = (v))
 #define stbiw__sbcount(a)        ((a) ? stbiw__sbn(a) : 0)
-#define stbiw__sbfree(a)         ((a) ? STBIW_FREE(stbiw__sbraw(a)),0 : 0)
+#define stbiw__sbfree(a)         ((a) ? STBIW_free(stbiw__sbraw(a)),0 : 0)
 
 static void* stbiw__sbgrowf(void** arr, int increment, int itemsize)
 {
@@ -995,7 +995,7 @@ STBIWDEF unsigned char* stbi_zlib_compress(unsigned char* data, int data_len, in
 
     for (i = 0; i < stbiw__ZHASH; ++i)
         (void)stbiw__sbfree(hash_table[i]);
-    STBIW_FREE(hash_table);
+    STBIW_free(hash_table);
 
     // store uncompressed instead if compression was worse
     if (stbiw__sbn(out) > data_len + 2 + ((data_len + 32766) / 32767) * 5) {
@@ -1158,7 +1158,7 @@ STBIWDEF unsigned char* stbi_write_png_to_mem(const unsigned char* pixels, int s
     }
 
     filt = (unsigned char*)STBIW_MALLOC((x * n + 1) * y); if (!filt) return 0;
-    line_buffer = (signed char*)STBIW_MALLOC(x * n); if (!line_buffer) { STBIW_FREE(filt); return 0; }
+    line_buffer = (signed char*)STBIW_MALLOC(x * n); if (!line_buffer) { STBIW_free(filt); return 0; }
     for (j = 0; j < y; ++j) {
         int filter_type;
         if (force_filter > -1) {
@@ -1189,9 +1189,9 @@ STBIWDEF unsigned char* stbi_write_png_to_mem(const unsigned char* pixels, int s
         filt[j * (x * n + 1)] = (unsigned char)filter_type;
         STBIW_MEMMOVE(filt + j * (x * n + 1) + 1, line_buffer, x * n);
     }
-    STBIW_FREE(line_buffer);
+    STBIW_free(line_buffer);
     zlib = stbi_zlib_compress(filt, y * (x * n + 1), &zlen, stbi_write_png_compression_level);
-    STBIW_FREE(filt);
+    STBIW_free(filt);
     if (!zlib) return 0;
 
     // each tag requires 12 bytes of overhead
@@ -1216,7 +1216,7 @@ STBIWDEF unsigned char* stbi_write_png_to_mem(const unsigned char* pixels, int s
     stbiw__wptag(o, "IDAT");
     STBIW_MEMMOVE(o, zlib, zlen);
     o += zlen;
-    STBIW_FREE(zlib);
+    STBIW_free(zlib);
     stbiw__wpcrc(&o, zlen);
 
     stbiw__wp32(o, 0);
@@ -1237,10 +1237,10 @@ STBIWDEF int stbi_write_png(char const* filename, int x, int y, int comp, const 
     if (png == NULL) return 0;
 
     f = stbiw__fopen(filename, "wb");
-    if (!f) { STBIW_FREE(png); return 0; }
+    if (!f) { STBIW_free(png); return 0; }
     fwrite(png, 1, len, f);
     fclose(f);
-    STBIW_FREE(png);
+    STBIW_free(png);
     return 1;
 }
 #endif
@@ -1251,7 +1251,7 @@ STBIWDEF int stbi_write_png_to_func(stbi_write_func* func, void* context, int x,
     unsigned char* png = stbi_write_png_to_mem((const unsigned char*)data, stride_bytes, x, y, comp, &len);
     if (png == NULL) return 0;
     func(context, png, len);
-    STBIW_FREE(png);
+    STBIW_free(png);
     return 1;
 }
 

@@ -13,8 +13,15 @@ bool CheckIfStandardFile(const char* filepath) {
 		|| isFile(filepath, ".pmn"));
 }
 
-void* GetStandardBitmap(GlobalParams* m, const char* standardPath, int* w, int* h) {
-	void* id;
+
+std::string ReplaceBitmapAndMetrics(GlobalParams* m, void*& buffer, const char* standardPath, int* w, int* h) {
+	// clean up
+	if (buffer) {
+		FreeData(buffer);
+		buffer = 0;
+	}
+	*w = 0;
+	*h = 0;
 	// im really sorry to say that channels varriable, you don't really matter
 	// unlike the image width and image height, you just get deallocated automatically
 	// by the stack once this function reaches the end of its scope
@@ -23,26 +30,38 @@ void* GetStandardBitmap(GlobalParams* m, const char* standardPath, int* w, int* 
 	int channels;
 
 	if(CheckIfStandardFile(standardPath)){
-		id = stbi_load(standardPath, w, h, &channels, 4);
-
-		if (!id) {
-			MessageBox(m->hwnd, "Unable to load primary image", "Unknown Error", MB_OK | MB_ICONERROR);
-			return 0;
+		buffer = stbi_load(standardPath, w, h, &channels, 4);
+		
+		if (!buffer) {
+			return "Error loading image data";
 		}
+		InvertAllColorChannels((uint32_t*)buffer, *w, *h);
 	}
 	else {
-		MessageBox(m->hwnd, "Failed to load because the provided file path is not in standard format", "Failed to load", MB_OK | MB_ICONERROR);
-		return 0;
-	}
-	ConvertToPremultipliedAlpha((uint32_t*)id, *w, *h);
-	InvertAllColorChannels((uint32_t*)id, *w, *h);
+		if (isFile(standardPath, ".sfbb")) {
+			buffer = decodesfbb(standardPath, w, h);
 
-	return id;
+			if (!buffer) {
+				buffer = 0;
+				return "Error loading SFBB image data";
+			}
+
+		}
+		else {
+			return "File is in an unsupported format";
+		}
+	}
+	ConvertToPremultipliedAlpha((uint32_t*)buffer, *w, *h);
+	
+	
+
+	return "Success";
 }
 
 
 
-std::string FileSaveDialog(HWND hwnd) {
+#include <filesystem>
+std::string FileSaveDialog(GlobalParams* m, HWND hwnd) {
 	OPENFILENAME ofn;
 	char szFileName[200];
 
@@ -54,6 +73,8 @@ std::string FileSaveDialog(HWND hwnd) {
 		systemTime.wHour%24, systemTime.wMinute, systemTime.wSecond);
 
 	ZeroMemory(&ofn, sizeof(OPENFILENAME));
+	std::filesystem::path p = m->fpath;
+	ofn.lpstrInitialDir = p.parent_path().string().c_str();
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = NULL;
 	ofn.lpstrFilter = "PNG Files (*.png)\0*.png\0All Files (*.*)\0*.*\0";
@@ -148,13 +169,13 @@ void CombineBuffer(GlobalParams* m, uint32_t* first, uint32_t* second, int width
 
 void FreeCombineBuffer(GlobalParams* m) {
 	if (m->tempCombineBuffer) {
-		free(m->tempCombineBuffer);
+		FreeData(m->tempCombineBuffer);
 	}
 }
 */
 
 void PrepareSaveImage(GlobalParams* m) {
-	std::string res = FileSaveDialog(m->hwnd);
+	std::string res = FileSaveDialog(m, m->hwnd);
 	if (res != "Invalid") {
 
 		m->loading = true;
@@ -171,7 +192,7 @@ void PrepareSaveImage(GlobalParams* m) {
 	}
 
 }
-// the bool is wether or not we should continue or not
+// the bool is whether or not we should continue or not
 bool doIFSave(GlobalParams* m) {
 	if (m->shouldSaveShutdown == true) {
 		int msgboxID = MessageBox(m->hwnd, "Would you like to save changes to the image", "Are you sure?", MB_YESNOCANCEL);
@@ -211,24 +232,26 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 	m->fpath = "Untitled";
 
 	if (m->imgdata) {
-		free(m->imgdata);
+		FreeData(m->imgdata);
 	}
 	if (m->imgoriginaldata) {
-		free(m->imgoriginaldata);
+		FreeData(m->imgoriginaldata);
 	}
 	//if (m->imgannotate) {
-	//	free(m->imgannotate);
+	//	FreeData(m->imgannotate);
 	//}
 	// put thing here
 
-	m->imgwidth = 4;
-	m->imgheight = 4;
-	m->imgdata = malloc(4*4*4);
-	m->imgoriginaldata = malloc(4*4*4);
-	for (int y = 0; y < 4; y++) {
-		for (int x = 0; x < 4; x++) {
-			*GetMemoryLocation(m->imgdata, x, y, 4, 4) = color;
-			*GetMemoryLocation(m->imgoriginaldata, x, y, 4, 4) = color;
+	int bimgw = 1280;
+	int bimgh = 720;
+	m->imgwidth = bimgw;
+	m->imgheight = 720;
+	m->imgdata = malloc(bimgw * 720 *4);
+	m->imgoriginaldata = malloc(bimgw * 720 *4);
+	for (int y = 0; y < 720; y++) {
+		for (int x = 0; x < bimgw; x++) {
+			*GetMemoryLocation(m->imgdata, x, y, bimgw, 720) = color;
+			*GetMemoryLocation(m->imgoriginaldata, x, y, bimgw, 720) = color;
 		}
 	}
 	
@@ -236,7 +259,7 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 	if (!m->imgdata || !m->imgoriginaldata) {
 		MessageBox(m->hwnd, "Error Loading Image: Big memory error", "Big Error", MB_OK | MB_ICONERROR);
 		if (m->imgdata) {
-			free(m->imgdata);
+			FreeData(m->imgdata);
 		}
 		m->imgwidth = 0;
 		m->imgheight = 0;
@@ -256,6 +279,7 @@ bool AllocateBlankImage(GlobalParams* m, uint32_t color) {
 	return true;
 }
 
+// openimagefrompath function here
 bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 
 	m->undoData.clear();
@@ -270,7 +294,7 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	m->loading = true;
 	RedrawSurface(m);
 	//Sleep(430);
-
+	
 	if (!doIFSave(m)) {
 		m->loading = false;
 		return false;
@@ -279,46 +303,42 @@ bool OpenImageFromPath(GlobalParams* m, std::string kpath, bool isLeftRight) {
 	m->fpath = kpath;
 	
 	if (m->imgdata) {
-		free(m->imgdata);
+		FreeData(m->imgdata);
 	}
 	if (m->imgoriginaldata) {
-		free(m->imgoriginaldata);
+		FreeData(m->imgoriginaldata);
 	}
 	//if (m->imgannotate) {
-	//	free(m->imgannotate);
+	//	FreeData(m->imgannotate);
 	//}
 	// put thing here
 	//auto start = std::chrono::high_resolution_clock::now();
 
-	if (CheckIfStandardFile(kpath.c_str())) {
-		m->imgdata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
-		m->imgoriginaldata = GetStandardBitmap(m, kpath.c_str(), &m->imgwidth, &m->imgheight);
+	//
+	std::string error = ReplaceBitmapAndMetrics(m, m->imgdata, kpath.c_str(), &m->imgwidth, &m->imgheight);
+	if (error != "Success" || !m->imgdata) {
+		if (error == "Success") {
+			error = "Unknown Error";
+		}
+
+		MessageBox(m->hwnd, error.c_str(), "Failed to load", MB_OK | MB_ICONERROR);
+		m->fpath = "";
+		// should have already cleaned up
+		ResetCoordinates(m);
+		m->mscaler = 1.0f;
 	}
 	else {
-		// no
+		// Success
+		m->imgoriginaldata = malloc(m->imgwidth * m->imgheight * 4);
+		memcpy(m->imgoriginaldata, m->imgdata, m->imgwidth * m->imgheight * 4);
+		autozoom(m);
+		m->smoothing = ((m->imgwidth * m->imgheight) > 625);
 	}
-
-	//auto end = std::chrono::high_resolution_clock::now();
-	//std::chrono::duration<float, std::milli> duration = end - start;
-	//m->etime = duration.count();
-
-	if (!m->imgdata || !m->imgoriginaldata) {
-		MessageBox(m->hwnd, "Error Loading Image", "Error", MB_OK | MB_ICONERROR);
-		if (m->imgdata) {
-			free(m->imgdata);
-		}
-		m->imgwidth = 0;
-		m->imgheight = 0;
-
-	}
-
+	//
 	//m->imgannotate = malloc(m->imgwidth * m->imgheight * 4);
 
 	//memset(m->imgannotate, 0x00, m->imgwidth * m->imgheight * 4);
 
-	// Auto-zoom
-	autozoom(m);
-	m->smoothing = ((m->imgwidth * m->imgheight) > 625);
 	m->shouldSaveShutdown = false;
 
 	m->loading = false;
@@ -337,7 +357,7 @@ std::string FileOpenDialog(HWND hwnd) {
 	ofn.hwndOwner = hwnd;
 	ofn.lpstrFile = szFile;
 	ofn.nMaxFile = sizeof(szFile);
-	ofn.lpstrFilter = "Supported Images (*.jpeg *.jpg *.png *.tga *.bmp *.psd; .gif; .hdr; .pic; .pnm; .m45)\0*.m45;*.jpeg;*.jpg;*.png;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0Every File\0*";
+	ofn.lpstrFilter = "Supported Images (*.sfbb *.jpeg *.jpg *.png *.tga *.bmp *.psd; .gif; .hdr; .pic; .pnm)\0*.sfbb;*.jpeg;*.jpg;*.png;*.tga;*.bmp;*.psd;*.gif;*.hdr;*.pic;*.pnm\0Every File\0*";
 	ofn.nFilterIndex = 1;
 	ofn.lpstrFileTitle = NULL;
 	ofn.nMaxFileTitle = 0;

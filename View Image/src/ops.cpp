@@ -6,13 +6,45 @@
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "stb_image_resize.h"
 
+
+
+typedef HRESULT(WINAPI* DwmSetWindowAttribute_t)(HWND, DWORD, LPCVOID, DWORD);
+bool DwmDarken(HWND hwnd) {
+	BOOL enable = TRUE;
+
+	// Load the dwmapi.dll dynamically
+	HMODULE hDwmApi = LoadLibrary(TEXT("dwmapi.dll"));
+	if (hDwmApi == nullptr) {
+		//Failed to load dwmapi.dll
+		return false;
+	}
+
+	// Get the address of the DwmSetWindowAttribute function
+	DwmSetWindowAttribute_t pDwmSetWindowAttribute =
+		(DwmSetWindowAttribute_t)GetProcAddress(hDwmApi, "DwmSetWindowAttribute");
+
+	if (pDwmSetWindowAttribute == nullptr) {
+		//Failed to get DwmSetWindowAttribute function address
+		FreeLibrary(hDwmApi);
+		return false;
+	}
+
+	// Call the DwmSetWindowAttribute function
+	HRESULT hr = pDwmSetWindowAttribute(hwnd, 20, &enable, sizeof(enable));
+	if (FAILED(hr)) {
+		std::cerr << "DwmSetWindowAttribute failed with HRESULT: " << hr << std::endl;
+	}
+
+	// Free the loaded library
+	FreeLibrary(hDwmApi);
+	return true;
+}
+
 #pragma region File
 
 bool DeleteDirectory(const char* directoryPath) {
 	return std::filesystem::remove_all(directoryPath);
 }
-
-
 
 void DeleteTempFiles(GlobalParams* m) {
 	if (!DeleteDirectory(m->undofolder.c_str())) {
@@ -106,6 +138,8 @@ HDC GetPrinterDC() {
 
 
 
+
+
 void PrintImageToPrinter(uint32_t* image, int width, int height, HDC printerDC) {
 
 	uint32_t* temp = (uint32_t*)malloc(width * height * 4);
@@ -153,7 +187,7 @@ void PrintImageToPrinter(uint32_t* image, int width, int height, HDC printerDC) 
 	EndPage(printerDC);
 	EndDoc(printerDC);
 
-	free(temp);
+	FreeData(temp);
 
 }
 
@@ -191,11 +225,11 @@ void ConfirmCropBuffer(GlobalParams* m, void** buffer, int newW, int newH) {
 		}
 	}
 
-	free(*buffer);
+	FreeData(*buffer);
 	*buffer = malloc(newW * newH * 4);
 	memcpy(*buffer, MyNewCropLifestyle, newW * newH * 4);
 
-	free(MyNewCropLifestyle);
+	FreeData(MyNewCropLifestyle);
 }
 
 void ConfirmCrop(GlobalParams* m) {
@@ -222,6 +256,7 @@ void ConfirmCrop(GlobalParams* m) {
 	m->shouldSaveShutdown = true;
 	
 	autozoom(m);
+	m->isInCropMode = false;
 	RedrawSurface(m);
 }
 /*
@@ -229,7 +264,7 @@ void ConfirmCrop(GlobalParams* m) {
 void ResizeImageToSize(GlobalParams* m, int width, int height) {
 	m->tempResizeBuffer = malloc(width * height * 4);
 	stbir_resize_uint8((unsigned char*)m->imgdata, m->imgwidth, m->imgheight, 0, (unsigned char*)m->tempResizeBuffer, width, height, 0, 4);
-	free(m->imgdata);
+	FreeData(m->imgdata);
 	m->imgwidth = width;
 	m->imgheight = height;
 	swapPointers(m->imgdata, m->tempResizeBuffer);
@@ -237,11 +272,11 @@ void ResizeImageToSize(GlobalParams* m, int width, int height) {
 
 	m->undoStep = 0;
 	m->undoData.clear();
-	free(m->imgannotate);
+	FreeData(m->imgannotate);
 	m->imgannotate = malloc(width * height * 4);
 	memset(m->imgannotate, 0x00, width * height * 4);
 	autozoom(m);
-	//free(to);
+	//FreeData(to);
 }
 */
 
@@ -253,7 +288,7 @@ void performResize(GlobalParams* m, void** memory, int owidth, int oheight, int 
 
 	// reallocate my image data to suit the new data
 
-	free(*memory);
+	FreeData(*memory);
 	*memory = malloc(nwidth * nheight * 4);
 	//m->imgwidth = nwidth;
 	//m->imgheight = nheight;
@@ -265,11 +300,11 @@ void performResize(GlobalParams* m, void** memory, int owidth, int oheight, int 
 
 	//m->undoStep = 0;
 	//m->undoData.clear();
-	//free(m->imgannotate);
+	//FreeData(m->imgannotate);
 	//m->imgannotate = malloc(width * height * 4);
 	//memset(m->imgannotate, 0x00, width * height * 4);
 	//FreeCombineBuffer(m);
-	free(tempOldBuffer);
+	FreeData(tempOldBuffer);
 }
 
 void ResizeImageToSize(GlobalParams* m, int nwidth, int nheight) {
@@ -289,7 +324,7 @@ void rotatememory(GlobalParams* m, int owidth, int oheight, int nwidth, int nhei
 	void* tempOldBuffer = malloc(owidth * oheight * 4);
 	memcpy(tempOldBuffer, *memory, owidth * oheight * 4);
 
-	free(*memory);
+	FreeData(*memory);
 	*memory = malloc(nwidth * nheight * 4);
 
 	// do
@@ -300,7 +335,7 @@ void rotatememory(GlobalParams* m, int owidth, int oheight, int nwidth, int nhei
 	}
 
 
-	free(tempOldBuffer);
+	FreeData(tempOldBuffer);
 }
 
 void rotateImage90Degrees(GlobalParams* m) {
@@ -320,7 +355,7 @@ void rotateImage90Degrees(GlobalParams* m) {
 }
 /*
 
-	//free(to);
+	//FreeData(to);
 
 	//
 	// Update width and height after rotation
@@ -340,7 +375,7 @@ void rotateImage90Degrees(GlobalParams* m) {
 	}
 
 	// Free memory of the original image
-	free(m->imgdata);
+	FreeData(m->imgdata);
 
 	// Update pointer to point to rotated image
 	m->imgdata = rotatedImage;
@@ -447,7 +482,6 @@ void no_offset(GlobalParams* m) {
 		m->iLocY = 0;
 	}
 
-	RedrawSurface(m);
 }
 
 void autozoom(GlobalParams* m) {
@@ -468,7 +502,6 @@ void autozoom(GlobalParams* m) {
 	m->mscaler = fzoom;
 	//if (mscaler > 1.0f && imgheight > 5) mscaler = 1.0f;
 
-	RedrawSurface(m);
 }
 
 
@@ -574,7 +607,7 @@ float gamma_table[TABLE_SIZE];
 
 void init_gamma_table(float gamma) {
 	for (int i = 0; i < TABLE_SIZE; ++i) {
-		gamma_table[i] = std::pow(i / 255.0f, gamma);
+		gamma_table[i] = (i / 255.0f)*(i / 255.0f);
 	}
 }
 
@@ -604,12 +637,12 @@ uint32_t lerp_gc(uint32_t color1, uint32_t color2, float alpha) {
     float r = (1 - alpha) * r1 + alpha * r2;
     float g = (1 - alpha) * g1 + alpha * g2;
     float b = (1 - alpha) * b1 + alpha * b2;
-
+	/**/
     // Undo gamma correction
-    a = std::pow(a, 1.0f / gamma);
-    r = std::pow(r, 1.0f / gamma);
-    g = std::pow(g, 1.0f / gamma);
-    b = std::pow(b, 1.0f / gamma);
+    a = sqrt(a);
+    r = sqrt(r);
+    g = sqrt(g);
+    b = sqrt(b);
 
     // Combine the lerped color channels into a single 32-bit value
     return (static_cast<uint32_t>(a * 255) << 24) | (static_cast<uint32_t>(r * 255) << 16) | (static_cast<uint32_t>(g * 255) << 8) | static_cast<uint32_t>(b * 255);
@@ -621,13 +654,79 @@ double gaussian(double x, double sigma) {
 	return exp(-(x * x) / (2 * sigma * sigma)) / (sqrt(2 * 3.14159265) * sigma);
 }
 
-void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize) {
+uint32_t* eintegralR=0;
+uint32_t* eintegralG=0;
+uint32_t* eintegralB=0;
+
+uint32_t eAssignedW = 0;
+uint32_t eAssignedH = 0;
+uint32_t* eAssignedMEM = 0;
+
+uint32_t* fintegralR = 0;
+uint32_t* fintegralG = 0;
+uint32_t* fintegralB = 0;
+
+uint32_t fAssignedW = 0;
+uint32_t fAssignedH = 0;
+uint32_t* fAssignedMEM = 0;
+
+bool lastmode;
+
+void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize, int mode) {
 	uint32_t halfKernel = kernelSize / 2;
 
+	// This entire thing is an optimization for keeping the two buffers on two different slots
 	// Compute integral image
-	uint32_t* integralR = (uint32_t*)malloc(width * height * sizeof(uint32_t));
-	uint32_t* integralG = (uint32_t*)malloc(width * height * sizeof(uint32_t));
-	uint32_t* integralB = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+	uint32_t* integralR;
+	uint32_t* integralG;
+	uint32_t* integralB;
+	if (mode == 1) {
+		if (!eintegralR) {
+			// init
+			eintegralR = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			eintegralG = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			eintegralB = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+		}
+		if (eAssignedH != height || eAssignedW != width || eAssignedMEM != mem) {
+			// refresh
+			FreeData(eintegralR); FreeData(eintegralG); FreeData(eintegralB);
+			eintegralR = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			eintegralG = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			eintegralB = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+		}
+		eAssignedW = width;
+		eAssignedH = height;
+		eAssignedMEM = mem;
+
+		integralR = eintegralR;
+		integralG = eintegralG;
+		integralB = eintegralB;
+	}
+	else {
+		if (!fintegralR) {
+			// init
+			fintegralR = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			fintegralG = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			fintegralB = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+		}
+		if (fAssignedH != height || fAssignedW != width || fAssignedMEM != mem) {
+			// refresh
+			FreeData(fintegralR); FreeData(fintegralG); FreeData(fintegralB);
+			fintegralR = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			fintegralG = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+			fintegralB = (uint32_t*)malloc(width * height * sizeof(uint32_t));
+		}
+		fAssignedW = width;
+		fAssignedH = height;
+		fAssignedMEM = mem;
+
+		integralR = fintegralR;
+		integralG = fintegralG;
+		integralB = fintegralB;
+	}
+
+	
+	
 
 	for (uint32_t y = 0; y < height; ++y) {
 		for (uint32_t x = 0; x < width; ++x) {
@@ -699,10 +798,11 @@ void boxBlur(uint32_t* mem, uint32_t width, uint32_t height, uint32_t kernelSize
 		}
 	}
 
-	free(integralR);
-	free(integralG);
-	free(integralB);
+	//FreeData(integralR);
+	//FreeData(integralG);
+	//FreeData(integralB);
 }
+
 
 
 
@@ -744,88 +844,161 @@ uint32_t multiplyColor(uint32_t color, float multiplier) {
 	return (alpha << 24) | (red << 16) | (green << 8) | blue;
 }
 
-void gaussian_blur_B(uint32_t* input_buffer, uint32_t* output_buffer, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
-	// Compute kernel size
-	int kernel_size = (int)ceil(sigma * 3) * 2 + 1;
 
-	// Allocate kernel array
-	double* kernel = (double*)malloc(kernel_size * sizeof(double));
 
-	// Compute kernel values
-	double sum = 0.0;
-	int i;
-	for (i = 0; i < kernel_size; i++) {
-		double x = (double)i - (double)(kernel_size - 1) / 2.0;
-		kernel[i] = gaussian(x, sigma);
-		sum += kernel[i];
-	}
 
-	// Normalize kernel
-	for (i = 0; i < kernel_size; i++) {
-		kernel[i] /= sum;
-	}
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 
-	// Allocate temporary row array
-	uint32_t* row = (uint32_t*)malloc(width * sizeof(uint32_t));
-
-	// Blur horizontally
-	int x, y;
-	for (y = 0; y < lH; y++) {
-		for (x = 0; x < lW; x++) {
-			int k;
-			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0, sum_a = 0.0;
-			for (k = 0; k < kernel_size; k++) {
-				int xk = x - (kernel_size - 1) / 2 + k;
-				if (xk >= 0 && xk < width) {
-					uint32_t pixel = *GetMemoryLocation(input_buffer, (xk + offX), (y + offY), width, height);
-					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
-					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
-					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
-					sum_a += (double)((pixel & 0xff000000) >> 24) * kernel[k];
-				}
-			}
-			row[x] = ((uint32_t)(sum_a + 0.5) << 24) |
-				((uint32_t)(sum_r + 0.5) << 16) |
-				((uint32_t)(sum_g + 0.5) << 8) |
-				((uint32_t)(sum_b + 0.5));
-		}
-		// Copy row back into output buffer
-		for (x = 0; x < lW; x++) {
-			*GetMemoryLocation(output_buffer, (x + offX), (y + offY), width, height) = row[x];
-		}
-	}
-
-	// Blur vertically
-	for (x = 0; x < lW; x++) {
-		for (y = 0; y < lH; y++) {
-			int k;
-			double sum_r = 0.0, sum_g = 0.0, sum_b = 0.0, sum_a = 0.0;
-			for (k = 0; k < kernel_size; k++) {
-				int yk = y - (kernel_size - 1) / 2 + k;
-				if (yk >= 0 && yk < lH) {
-					uint32_t pixel = *GetMemoryLocation(output_buffer, (x + offX), (yk + offY), width, height);
-					sum_r += (double)((pixel & 0xff0000) >> 16) * kernel[k];
-					sum_g += (double)((pixel & 0x00ff00) >> 8) * kernel[k];
-					sum_b += (double)(pixel & 0x0000ff) * kernel[k];
-					sum_a += (double)((pixel & 0xff000000) >> 24) * kernel[k];
-				}
-			}
-			row[y] = ((uint32_t)(sum_a + 0.5) << 24) |
-				((uint32_t)(sum_r + 0.5) << 16) |
-				((uint32_t)(sum_g + 0.5) << 8) |
-				((uint32_t)(sum_b + 0.5));
-		}
-		// Copy row back into output buffer
-		for (y = 0; y < lH; y++) {
-			*GetMemoryLocation(output_buffer, (offX + x), (offY + y), width, height) = row[y];
-		}
-	}
-
-	// Free memory
-	free(kernel);
-	free(row);
+// Helper function to clamp values between 0 and 255
+static inline uint8_t clamp(int value) {
+	if (value < 0) return 0;
+	if (value > 255) return 255;
+	return (uint8_t)value;
 }
 
+// Compute integral image for a single channel
+void compute_integral_image(const uint8_t* input, int width, int height, uint32_t* integral_image) {
+	for (int y = 0; y < height; ++y) {
+		uint32_t row_sum = 0;
+		for (int x = 0; x < width; ++x) {
+			row_sum += input[y * width + x];
+			integral_image[y * width + x] = row_sum + (y > 0 ? integral_image[(y - 1) * width + x] : 0);
+		}
+	}
+}
+
+// Get sum of pixel values in a rectangular region using integral image
+uint32_t get_integral_sum(const uint32_t* integral_image, int width, int x0, int y0, int x1, int y1) {
+	uint32_t A = (x0 > 0 && y0 > 0) ? integral_image[(y0 - 1) * width + (x0 - 1)] : 0;
+	uint32_t B = (y0 > 0) ? integral_image[(y0 - 1) * width + x1] : 0;
+	uint32_t C = (x0 > 0) ? integral_image[y1 * width + (x0 - 1)] : 0;
+	uint32_t D = integral_image[y1 * width + x1];
+	return D + A - B - C;
+}
+
+// Apply box blur using integral image
+// This is a DIFFERENT box blur function than the menu and stuff
+void box_blur(const uint32_t* integral_image, uint8_t* output, int width, int height, int radius) {
+	int diameter = 2 * radius + 1;
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			int x0 = (x - radius < 0) ? 0 : x - radius;
+			int y0 = (y - radius < 0) ? 0 : y - radius;
+			int x1 = (x + radius >= width) ? width - 1 : x + radius;
+			int y1 = (y + radius >= height) ? height - 1 : y + radius;
+
+			uint32_t sum = get_integral_sum(integral_image, width, x0, y0, x1, y1);
+			int area = (x1 - x0 + 1) * (y1 - y0 + 1);
+			output[y * width + x] = clamp(sum / area);
+		}
+	}
+}
+// Gaussian blur using three-pass box blur approximation with integral images
+void gaussian_blur_B(uint32_t* input_buffer, uint32_t* output_buffer, int lW, int lH, double sigma, uint32_t width, uint32_t height, uint32_t offX, uint32_t offY) {
+	int radius = (int)(sigma * 3.0);
+	int integral_size = width * height;
+	uint32_t* integral_image_r = (uint32_t*)malloc(integral_size * sizeof(uint32_t));
+	uint32_t* integral_image_g = (uint32_t*)malloc(integral_size * sizeof(uint32_t));
+	uint32_t* integral_image_b = (uint32_t*)malloc(integral_size * sizeof(uint32_t));
+	uint32_t* integral_image_a = (uint32_t*)malloc(integral_size * sizeof(uint32_t));
+	uint8_t* temp_buffer1_r = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer1_g = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer1_b = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer1_a = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer2_r = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer2_g = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer2_b = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+	uint8_t* temp_buffer2_a = (uint8_t*)malloc(integral_size * sizeof(uint8_t));
+
+	if (!integral_image_r || !integral_image_g || !integral_image_b || !integral_image_a ||
+		!temp_buffer1_r || !temp_buffer1_g || !temp_buffer1_b || !temp_buffer1_a ||
+		!temp_buffer2_r || !temp_buffer2_g || !temp_buffer2_b || !temp_buffer2_a) {
+		free(integral_image_r);
+		free(integral_image_g);
+		free(integral_image_b);
+		free(integral_image_a);
+		free(temp_buffer1_r);
+		free(temp_buffer1_g);
+		free(temp_buffer1_b);
+		free(temp_buffer1_a);
+		free(temp_buffer2_r);
+		free(temp_buffer2_g);
+		free(temp_buffer2_b);
+		free(temp_buffer2_a);
+		return; // Handle memory allocation failure
+	}
+
+	// Split input buffer into separate channels and compute integral images
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			uint32_t pixel = input_buffer[y * width + x];
+			temp_buffer1_r[y * width + x] = (pixel >> 16) & 0xFF;
+			temp_buffer1_g[y * width + x] = (pixel >> 8) & 0xFF;
+			temp_buffer1_b[y * width + x] = pixel & 0xFF;
+			temp_buffer1_a[y * width + x] = (pixel >> 24) & 0xFF;
+		}
+	}
+
+	compute_integral_image(temp_buffer1_r, width, height, integral_image_r);
+	compute_integral_image(temp_buffer1_g, width, height, integral_image_g);
+	compute_integral_image(temp_buffer1_b, width, height, integral_image_b);
+	compute_integral_image(temp_buffer1_a, width, height, integral_image_a);
+
+	// Apply first pass of box blur
+	box_blur(integral_image_r, temp_buffer2_r, width, height, radius);
+	box_blur(integral_image_g, temp_buffer2_g, width, height, radius);
+	box_blur(integral_image_b, temp_buffer2_b, width, height, radius);
+	box_blur(integral_image_a, temp_buffer2_a, width, height, radius);
+
+	// Compute integral images for the intermediate buffers
+	compute_integral_image(temp_buffer2_r, width, height, integral_image_r);
+	compute_integral_image(temp_buffer2_g, width, height, integral_image_g);
+	compute_integral_image(temp_buffer2_b, width, height, integral_image_b);
+	compute_integral_image(temp_buffer2_a, width, height, integral_image_a);
+
+	// Apply second pass of box blur
+	box_blur(integral_image_r, temp_buffer1_r, width, height, radius);
+	box_blur(integral_image_g, temp_buffer1_g, width, height, radius);
+	box_blur(integral_image_b, temp_buffer1_b, width, height, radius);
+	box_blur(integral_image_a, temp_buffer1_a, width, height, radius);
+
+	// Compute integral images for the intermediate buffers
+	compute_integral_image(temp_buffer1_r, width, height, integral_image_r);
+	compute_integral_image(temp_buffer1_g, width, height, integral_image_g);
+	compute_integral_image(temp_buffer1_b, width, height, integral_image_b);
+	compute_integral_image(temp_buffer1_a, width, height, integral_image_a);
+
+	// Apply third pass of box blur
+	box_blur(integral_image_r, temp_buffer2_r, width, height, radius);
+	box_blur(integral_image_g, temp_buffer2_g, width, height, radius);
+	box_blur(integral_image_b, temp_buffer2_b, width, height, radius);
+	box_blur(integral_image_a, temp_buffer2_a, width, height, radius);
+
+	// Combine blurred channels back into output buffer
+	for (int y = 0; y < height; ++y) {
+		for (int x = 0; x < width; ++x) {
+			output_buffer[y * width + x] = ((uint32_t)temp_buffer2_a[y * width + x] << 24) |
+				((uint32_t)temp_buffer2_r[y * width + x] << 16) |
+				((uint32_t)temp_buffer2_g[y * width + x] << 8) |
+				(uint32_t)temp_buffer2_b[y * width + x];
+		}
+	}
+
+	free(integral_image_r);
+	free(integral_image_g);
+	free(integral_image_b);
+	free(integral_image_a);
+	free(temp_buffer1_r);
+	free(temp_buffer1_g);
+	free(temp_buffer1_b);
+	free(temp_buffer1_a);
+	free(temp_buffer2_r);
+	free(temp_buffer2_g);
+	free(temp_buffer2_b);
+	free(temp_buffer2_a);
+}
 
 
 // Gaussian blur function
@@ -907,18 +1080,13 @@ void gaussian_blur(uint32_t* pixels, int lW, int lH, double sigma, uint32_t widt
 	}
 
 	// Free memory
-	free(kernel);
-	free(row);
+	FreeData(kernel);
+	FreeData(row);
 }
 
 
 #pragma endregion
 
-
-uint8_t clamp(int value) {
-	// Clamp the value to the range [0, 255]
-	return (uint8_t)(value < 0 ? 0 : (value > 255 ? 255 : value));
-}
 
 #include <stdint.h>
 
@@ -931,7 +1099,7 @@ void gaussian_blur_toolbar(GlobalParams* m, uint32_t* pixels) {
 	std::chrono::steady_clock::time_point start = std::chrono::high_resolution_clock::now();
 	//fast_gaussian_blur(px, gd, m->width, m->toolheight, 4, 4.0f, 10, Border::kKernelCrop);
 	//gaussian_blur(pixels, m->width, 40, 4.0, m->width, 40, 0, 0);
-	boxBlur(pixels, m->width, m->toolheight, 15);
+	boxBlur(pixels, m->width, m->toolheight, 15, 1);
 
 	//convolution((uint32_t*)m->scrdata, (uint32_t*)m->toolbar_gaussian_data, m->width, 40, kernel, 9);
 
@@ -1048,7 +1216,7 @@ bool PasteImageFromClipboard(GlobalParams* m) {
 	uint32_t* d = GetImageFromClipboard(w, h);
 	if (d) {
 		if (m->imgdata) {
-			free(m->imgdata);
+			FreeData(m->imgdata);
 		}
 		Beep(4000, 40);
 		m->imgdata = d;

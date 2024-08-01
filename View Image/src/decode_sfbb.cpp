@@ -129,8 +129,8 @@ const char* encodeimage(const char* filepath) {
     // Close the handle once we don't need it.
     CloseHandle(hFile);
 
-    free(imgdata);
-    free(data);
+    FreeData(imgdata);
+    FreeData(data);
 
 
     return 0;
