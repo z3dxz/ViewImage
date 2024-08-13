@@ -1859,7 +1859,7 @@ void RightUp(GlobalParams* m) {
 				},0,0
 			},
 
-			{"Toggle Anti-alliasing{s}",
+			{"Toggle Smoothing{s}",
 				[m]() -> bool {
 					m->isMenuState = false;
 					m->smoothing = !m->smoothing;
