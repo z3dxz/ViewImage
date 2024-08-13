@@ -438,6 +438,8 @@ int getXbuttonID(GlobalParams* m, POINT mPos) {
 	*/
 }
 
+
+
 void GetCropCoordinates(GlobalParams* m, uint32_t* outDistLeft, uint32_t* outDistRight, uint32_t* outDistTop, uint32_t* outDistBottom) {
 
 	float realWidth = (float)(m->CoordRight - m->CoordLeft);
@@ -609,6 +611,103 @@ void init_gamma_table(float gamma) {
 	for (int i = 0; i < TABLE_SIZE; ++i) {
 		gamma_table[i] = (i / 255.0f)*(i / 255.0f);
 	}
+}
+
+
+void AutoAdjustLevels(GlobalParams* m, uint32_t* buffer) {
+	m->isMenuState = false;
+	
+
+	int width = m->imgwidth;
+	int height = m->imgheight;
+
+	// examination
+	int minR = 255;
+	int minG = 255;
+	int minB = 255;
+
+	int maxR = 0;
+	int maxG = 0;
+	int maxB = 0;
+
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint32_t pxlColor = *GetMemoryLocation(m->imgdata, x, y, width, height);
+			uint8_t a = (pxlColor >> 24) & 0xFF;
+			uint8_t r = (pxlColor >> 16) & 0xFF;
+			uint8_t g = (pxlColor >> 8) & 0xFF;
+			uint8_t b = (pxlColor) & 0xFF;
+			if (a == 255) {
+				if (minR > r) { minR = r; }
+				if (minG > g) { minG = g; }
+				if (minB > b) { minB = b; }
+
+				if (maxR < r) { maxR = r; }
+				if (maxG < g) { maxG = g; }
+				if (maxB < b) { maxB = b; }
+			}
+		}
+	}
+
+	// fix division by zero
+	if (maxR == minR) { if (maxR < 255) { maxR++; } else { minR--; } }
+	if (maxG == minG) { if (maxG < 255) { maxG++; } else { minG--; } }
+	if (maxB == minB) { if (maxB < 255) { maxB++; } else { minB--; } }
+
+	if (minR == 0 && minG == 0 && minB == 0 && maxR == 255 && maxG == 255 && maxB == 255) {
+		MessageBox(m->hwnd, "There is no adjustment needed", "Automatic Adjust", MB_OK);
+		return;
+	}
+
+	// modify
+	m->shouldSaveShutdown = true;
+	createUndoStep(m, false);
+
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			uint32_t pxlColor = *GetMemoryLocation(m->imgdata, x, y, width, height);
+
+			uint32_t a = (pxlColor >> 24) & 0xFF;
+			uint32_t r = (pxlColor >> 16) & 0xFF;
+			uint32_t g = (pxlColor >> 8) & 0xFF;
+			uint32_t b = (pxlColor) & 0xFF;
+
+			uint8_t newR = ((r - minR) * (255) / (maxR - minR));
+			uint8_t newG = ((g - minG) * (255) / (maxG - minG));
+			uint8_t newB = ((b - minB) * (255) / (maxB - minB));
+
+			*GetMemoryLocation(m->imgdata, x, y, width, height) = change_alpha(RGB(newB, newG, newR), a);
+		}
+	}
+
+	Beep(2000, 30);
+
+	RedrawSurface(m);
+}
+
+uint32_t subtractColors(uint32_t color1, uint32_t color2) {
+	// Extract color channels (assuming RGBA format)
+	uint8_t r1 = (color1 >> 24) & 0xFF;
+	uint8_t g1 = (color1 >> 16) & 0xFF;
+	uint8_t b1 = (color1 >> 8) & 0xFF;
+	uint8_t a1 = color1 & 0xFF;
+
+	uint8_t r2 = (color2 >> 24) & 0xFF;
+	uint8_t g2 = (color2 >> 16) & 0xFF;
+	uint8_t b2 = (color2 >> 8) & 0xFF;
+	uint8_t a2 = color2 & 0xFF;
+
+	// Subtract each channel
+	uint8_t r = max(0, static_cast<int>(r1) - static_cast<int>(r2));
+	uint8_t g = max(0, static_cast<int>(g1) - static_cast<int>(g2));
+	uint8_t b = max(0, static_cast<int>(b1) - static_cast<int>(b2));
+	uint8_t a = max(0, static_cast<int>(a1) - static_cast<int>(a2));
+
+	// Combine channels back into a single uint32_t
+	return (static_cast<uint32_t>(r) << 24) |
+		(static_cast<uint32_t>(g) << 16) |
+		(static_cast<uint32_t>(b) << 8) |
+		static_cast<uint32_t>(a);
 }
 
 bool yes = 0;

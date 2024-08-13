@@ -14,6 +14,7 @@ HBRUSH hBrush = NULL;
 static GlobalParams* m;
 
 std::string text = "Cosine64";
+std::string fontstring = "segoeui.ttf";
 int locationX = 0;
 int locationY = 0;
 int textSize = 32;
@@ -31,25 +32,36 @@ int ShowDrawTextDialog(GlobalParams* m0) {
     didinit = false;
     dontdo = false;
     m = m0;
+    if (m->drawmode) {
+        m->drawmode = false;
+    }
+
     // Create the main dialog
+
     DialogBox(GetModuleHandle(0), MAKEINTRESOURCE(DrawTextDialog), m->hwnd, (DLGPROC)DialogProc);
 
     return 0;
 }
 
 FT_Face f = nullptr;
-static void ApplyEffectToBuffer() {
+static void ApplyEffectToBuffer(void* fromBuffer, void* toBuffer) {
 
     SwitchFont(f);
 
-    memcpy(m->imagepreview, m->imgdata, m->imgwidth * m->imgheight * 4);
-    PlaceString(m, textSize, text.c_str(), locationX, locationY, InvertCC(textColor, true), m->imagepreview, m->imgwidth, m->imgheight, m->imgdata);
+    memcpy(toBuffer, fromBuffer, m->imgwidth * m->imgheight * 4);
+    PlaceString(m, textSize, text.c_str(), locationX, locationY, InvertCC(textColor, true), toBuffer, m->imgwidth, m->imgheight, fromBuffer);
     RedrawSurface(m);
 }
 
-static void ConfirmEffect() {
+static void ConfirmEffect(bool checked) {
     createUndoStep(m, false);
-    memcpy(m->imgdata, m->imagepreview, m->imgwidth * m->imgheight * 4);
+   // memcpy(m->imgdata, m->imagepreview, m->imgwidth * m->imgheight * 4);
+    
+    ApplyEffectToBuffer(m->imgdata, m->imgdata);
+    if (!checked) {
+        ApplyEffectToBuffer(m->imgoriginaldata, m->imgoriginaldata);
+    }
+
     m->shouldSaveShutdown = true;
 }
 
@@ -58,14 +70,32 @@ HWND adtdb;
 HWND posXd;
 HWND posYd;
 HWND tss;
+HWND AffectDrawingEraseBox;
+HWND fnameid;
+
+void UpdateLoadFont() {
+    if (f) {
+        FT_Done_Face(f);
+    }
+    f = LoadFont(m, fontstring);
+
+    SetWindowText(fnameid, fontstring.c_str());
+
+}
 
 void InitDialogControls(HWND hwnd) {
-    f = LoadFont(m, "SegoeUI.ttf");
+    
     
     adtdb = GetDlgItem(hwnd, ActualDrawTextDialogBox);
     posXd = GetDlgItem(hwnd, posXs);
     posYd = GetDlgItem(hwnd, posYs);
-     tss  = GetDlgItem(hwnd, TextSizeSlider);
+    tss = GetDlgItem(hwnd, TextSizeSlider);
+    fnameid = GetDlgItem(hwnd, FontNameID);
+
+
+    AffectDrawingEraseBox = GetDlgItem(hwnd, AffectDrawingErase);
+    SendMessage(AffectDrawingEraseBox, BM_SETCHECK, (WPARAM)BST_CHECKED, 0);
+
 
     SetWindowText(adtdb, text.c_str());
 
@@ -80,6 +110,8 @@ void InitDialogControls(HWND hwnd) {
 
     SetFocus(adtdb);
     SendMessage(adtdb, EM_SETSEL, 0, -1);
+
+    UpdateLoadFont();
 }
 
 void UpdateImage() {
@@ -101,7 +133,7 @@ void UpdateImage() {
     textSize = size;
     text = std::string(str);
 
-    ApplyEffectToBuffer();
+    ApplyEffectToBuffer(m->imgdata, m->imagepreview);
 }
 
 void freeness() {
@@ -109,14 +141,18 @@ void freeness() {
     if (m->imagepreview) {
         FreeData(m->imagepreview);
     }
-    FT_Done_Face(f);
-    f = nullptr;
     
 }
 static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 
     switch (msg) {
         case WM_INITDIALOG: {
+
+
+            RECT r;
+            GetWindowRect(m->hwnd, &r);
+
+            SetWindowPos(hwnd, 0, r.left+((m->CoordRight>m->width ? m->width : m->CoordRight)), r.top, 0, 0, SWP_NOSIZE);
 
             m->imagepreview = malloc(m->imgwidth * m->imgheight * 4);
             memcpy(m->imagepreview, m->imgdata, m->imgwidth * m->imgheight * 4);
@@ -133,6 +169,16 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
         case WM_COMMAND: {
             UpdateImage();
             switch (LOWORD(wparam)) {
+            case SelectFontButton: {
+                std::string font = ShowFontDialog(m, hwnd);
+
+                if (font != "Error") {
+                    fontstring = font;
+                    UpdateLoadFont();
+                    UpdateImage();
+                }
+                break;
+            }
             case ColorTextButton: {
 
                 bool success = true;// alpha to 0 weird windows bug
@@ -155,8 +201,10 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
                 break;
             }
             case IDOK: {
-                // Confirm
-                ConfirmEffect();
+
+                LRESULT result = SendMessage(AffectDrawingEraseBox, BM_GETCHECK, 0, 0);
+
+                ConfirmEffect(result == BST_CHECKED);
 
                 dontdo = true;
                 freeness();
@@ -175,7 +223,7 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
             UpdateImage();
             return TRUE;
         }
-        case WM_CTLCOLORSTATIC: {
+    case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wparam;
             HWND hwndStatic = (HWND)lparam;
 
@@ -191,9 +239,9 @@ static LRESULT CALLBACK DialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
                 return DefWindowProc(hwnd, msg, wparam, lparam);
             }
             break;
-        }
-        case WM_CLOSE: {
-            dontdo = true;
+    }
+    case WM_CLOSE: {
+        dontdo = true;
             freeness();
             
             EndDialog(hwnd, IDCANCEL);

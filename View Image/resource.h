@@ -20,6 +20,8 @@
 #define CROPICON                        137
 #define DrawTextD                       138
 #define DrawTextDialog                  138
+#define FontDialog                      140
+#define DrawTextDialogFuture            141
 #define WidthPBox                       1001
 #define HeightPBox                      1002
 #define parameters_dialog_baba          1003
@@ -59,14 +61,18 @@
 #define TextSizeSlider                  1030
 #define ColorTextBlock                  1031
 #define ColorOutlineBlock               1032
+#define FontDialogListComponent         1033
+#define PreviewTXT                      1034
+#define AffectDrawingErase              1036
+#define FontNameID                      1037
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        140
+#define _APS_NEXT_RESOURCE_VALUE        142
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1033
+#define _APS_NEXT_CONTROL_VALUE         1038
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

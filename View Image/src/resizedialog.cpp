@@ -303,8 +303,9 @@ LRESULT CALLBACK ResizeDialogProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
     case WM_CLOSE: {
         EndDialog(hwnd, IDCANCEL);
     }
-    default:
+    default: {
         return FALSE;
+    }
     }
 
     return TRUE;

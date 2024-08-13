@@ -2,6 +2,5 @@
 
 #include "../../headers/globalvar.hpp"
 #include "../../headers/ops.hpp"
-#include "fontdialog.h"
 
-int ShowDrawTextDialog(GlobalParams* m0);
+std::string ShowFontDialog(GlobalParams* m0, HWND hwndModal);

@@ -105,8 +105,11 @@ void gaussianBlurFFT(uint32_t* image, int height, int width, int kernelSize, dou
 uint32_t multiplyColor(uint32_t color, float multiplier);
 
 
+uint32_t subtractColors(uint32_t color1, uint32_t color2);
 bool CopyImageToClipboard(GlobalParams* m, void* imageData, int width, int height);
 bool PasteImageFromClipboard(GlobalParams* m);
 
 uint32_t change_alpha(uint32_t color, uint8_t new_alpha);
 void overlayBuffers(const uint32_t* background, const uint32_t* foreground, uint32_t* output, float opacity, size_t bufferSize);
+
+void AutoAdjustLevels(GlobalParams* m, uint32_t* buffer);

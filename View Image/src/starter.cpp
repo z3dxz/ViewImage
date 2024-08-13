@@ -142,7 +142,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
 	{
 		LPMINMAXINFO lpMMI = (LPMINMAXINFO)lparam;
 		lpMMI->ptMinTrackSize.x = 505;
-		lpMMI->ptMinTrackSize.y = 184;
+		lpMMI->ptMinTrackSize.y = 220;
 
 
 		break;

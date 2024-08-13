@@ -165,7 +165,9 @@
   <ItemGroup>
     <ClCompile Include="src\effectdialog\brightnesscontrast.cpp" />
     <ClCompile Include="src\effectdialog\drawtext.cpp" />
+    <ClCompile Include="src\effectdialog\fontdialog.cpp" />
     <ClCompile Include="src\effectdialog\gaussian.cpp" />
+    <ClCompile Include="src\effectdialog\headers\fontdialog.h" />
     <ClCompile Include="src\resizedialog.cpp" />
     <ClCompile Include="src\events.cpp" />
     <ClCompile Include="src\imgload.cpp" />

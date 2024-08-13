@@ -139,7 +139,7 @@ const char* encodeimage(const char* filepath) {
 
 void* decodesfbb(const char* filepath, int* imgwidth, int* imgheight) {
     printf("\n -- Reading File -- \n");
-    HANDLE hFile = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    HANDLE hFile = CreateFile(filepath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
 
     if (hFile == INVALID_HANDLE_VALUE) {
         printf("sorry, the handle value was invalid");
@@ -148,7 +148,7 @@ void* decodesfbb(const char* filepath, int* imgwidth, int* imgheight) {
 
     DWORD fsize = GetFileSize(hFile, 0);
     printf("File Size: %i\n", fsize);
-
+    
     int sizeOfAllocation = fsize;
     void* data = malloc(sizeOfAllocation);
     DWORD dwBytesRead = 0;

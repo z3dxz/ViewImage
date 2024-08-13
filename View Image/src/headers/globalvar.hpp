@@ -222,6 +222,7 @@ struct GlobalParams {
 	bool isJoystick = false;
 	JOYINFOEX joyInfoEx;
 	UINT joystickID = JOYSTICKID1;
+
 };
 
 

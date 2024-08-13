@@ -392,6 +392,13 @@ void PerformWASDMagic(GlobalParams* m) {
 void OpenImageEffectsMenu(GlobalParams* m) {
 	m->menuVector = {
 
+		{"Automatic Adjust",
+			[m]() -> bool {
+				AutoAdjustLevels(m, (uint32_t*)m->imgdata);
+				return true;
+			},78,13
+		},
+
 		{"Brightness/Contrast",
 			[m]() -> bool {
 				m->isMenuState = false;
@@ -558,7 +565,12 @@ int PerformCasedBasedOperation(GlobalParams* m, uint32_t id, bool menustate) {
 			// delete
 			int result = MessageBox(m->hwnd, "This will delete the image permanently!!!", "Are You Sure?", MB_YESNO);
 			if (result == IDYES) {
-				DeleteFile(m->fpath.c_str());
+				bool i = DeleteFile(m->fpath.c_str());
+				if (!i) {
+					int err = GetLastError();
+					MessageBox(m->hwnd, std::string("Can not delete file - Error: " + std::to_string(err)).c_str(), "Error", MB_OK | MB_ICONERROR);
+					return 0;
+				}
 				CHAR szPath[MAX_PATH];
 				GetModuleFileName(NULL, szPath, MAX_PATH);
 
@@ -719,7 +731,9 @@ bool ToolbarMouseDown(GlobalParams* m) {
 	{
 		// fullscreen icon
 		if ((mPP.x > m->width - 36 && mPP.x < m->width - 13) && (mPP.y > 12 && mPP.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
-			ToggleFullscreen(m); // TODO: please make a seperate icon for the exiting fullscreen
+			if (m->width > 535) { // to check to make sure window isn't too small
+				ToggleFullscreen(m); // TODO: please make a seperate icon for the exiting fullscreen
+			}
 
 			return 0;
 		}
@@ -895,26 +909,39 @@ void placeDraw(GlobalParams* m, POINT* pos) {
 							if (GetKeyState(VK_CONTROL) & 0x8000 && GetKeyState(VK_SHIFT) & 0x8000) {
 								actualDrawColor = 0x00000000;
 							}
-
-							float alpha = (pow(distance / radius, 2)); // Smooth function for transparency based on distance
+							float transparency = 0.0f;
+							if (m->a_softmode) {
+								transparency = pow(distance / radius, 2);
+							}
 							//alpha = (0.1f * alpha)+0.9f;
 							if (m->drawSize > 1.01f) {
 								float smoothening = 1.0f / (m->drawSize) * 5;
 								//alpha = 5.0f*(alpha - 0.8f);
 								if (!m->a_softmode) {
-									alpha = (smoothening + alpha - 1) / smoothening;
-									if (alpha < 0.001f) {
-										alpha = 0.001f;
+									//transparency = (smoothening + transparency - 1) / smoothening;
+									transparency = distance-radius+1;
+									if (transparency < 0.001f) {
+										transparency = 0.0f;
+									}
+									if (transparency > 9.99f) {
+										transparency = 1.0f;
 									}
 								}
 								
-								float radiusalpha = (1.0f - alpha) * realOpacity;
+								float radiusalpha = (1.0f - transparency) * realOpacity;
 
 								if (m->a_opacity > 0.99f && radiusalpha > 0.995f) {
 									*memoryPath = actualDrawColor;
 								}
 								else {
-									*memoryPath = lerp_gc(*memoryPath, actualDrawColor, radiusalpha);
+									if (m->a_resolution > 20) {
+										m->etime = 500;
+										*memoryPath = lerp_gc(*memoryPath, actualDrawColor, radiusalpha);
+									}
+									else {
+										m->etime = 200;
+										*memoryPath = lerp(*memoryPath, actualDrawColor, radiusalpha);
+									}
 								}
 							}
 							else {
@@ -1276,7 +1303,7 @@ void PushUndo(GlobalParams* m, uint32_t* thisImage, uint32_t* thisOImage) {
 	}
 
 	if (!is2) {
-		MessageBox(m->hwnd, "Failed to create undo data package (2)", "Oops", MB_OK | MB_ICONERROR);
+		MessageBox(m->hwnd, "Failed to create undo data package (Original Image)", "Oops", MB_OK | MB_ICONERROR);
 		return;
 	}
 
@@ -1822,7 +1849,7 @@ void RightUp(GlobalParams* m) {
 	if(!(GetAsyncKeyState(VK_LBUTTON) & 0x8000)){
 		m->menuVector = {
 
-			{"Blank Image{s}",
+			{"Blank Image",
 				[m]() -> bool {
 					m->isMenuState = false;
 					if (AllocateBlankImage(m, 0xFFFFFFFF)) {
@@ -1856,7 +1883,7 @@ void RightUp(GlobalParams* m) {
 				},39,0
 			},
 
-			{"Resize Image [CTRL+R]{s}",
+			{"Resize Image [CTRL+R]",
 				[m]() -> bool {
 					m->isMenuState = false;
 					RedrawSurface(m);
@@ -1865,7 +1892,7 @@ void RightUp(GlobalParams* m) {
 					return true;
 				},52,0
 			},
-			{"Information{s}",
+			{"Information",
 				[m]() -> bool {
 					ShowMyInformation(m);
 					return true;

@@ -230,21 +230,14 @@ int PlaceString(GlobalParams* m, int size, const char* inputstr, uint32_t locX, 
 	return e;
 }
 
-
-
-void dDrawFilledRectangle(void* mem, int kwidth, int kheight, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++) {
-			uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth, kheight);
-			if (opacity < 0.99f) {
-				*ma = lerp(*ma, color, opacity);
-			}
-			else {
-				*ma = color;
-			}
-		}
-	}
+int PlaceStringShadow(GlobalParams* m, int size, const char* inputstr, uint32_t locX, uint32_t locY, uint32_t color, void* mem, int shadowY, int shadowX = 0) {
+	bool b = ActuallyPlaceString(m, size, inputstr, locX+shadowX, locY + shadowY, 0x000000, mem, m->width, m->height, mem);
+	bool e = ActuallyPlaceString(m, size, inputstr, locX, locY, color, mem, m->width, m->height, mem);
+	return e && b;
 }
+
+
+
 
 void dDrawRectangle(void* mem, int kwidth, int kheight, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
 	for (int y = 0; y < height; y++) {
@@ -287,6 +280,23 @@ void dDrawRoundedFilledRectangle(void* mem, int kwidth, int kheight, int xloc, i
 				}
 			}
 			//}
+		}
+	}
+}
+
+void dDrawFilledRectangle(void* mem, int kwidth, int kheight, int xloc, int yloc, int width, int height, uint32_t color, float opacity) {
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			if ((xloc + x) < 0 || (xloc + x) >= kwidth || (yloc + y) < 0 || (yloc + y) >= kheight) {
+				continue;
+			}
+			uint32_t* ma = GetMemoryLocation(mem, xloc + x, yloc + y, kwidth, kheight);
+			if (opacity < 0.99f) {
+				*ma = lerp(*ma, color, opacity);
+			}
+			else {
+				*ma = color;
+			}
 		}
 	}
 }
@@ -599,6 +609,15 @@ void RenderToolbar(GlobalParams* m) {
 		RenderToolbarButtons(m, m->toolbarData, 0xFFFFFF, 0xFFE0E0);
 
 
+		// version
+		SwitchFont(m->OCRAExt);
+		if (m->width > 540) {
+			PlaceString(m, 13, REAL_BIG_VERSION_BOOLEAN, m->width - 72, 16, 0x909090, m->scrdata);
+		}
+		else {
+			PlaceString(m, 13, REAL_BIG_VERSION_BOOLEAN, m->width - 50, m->toolheight + 4, 0x909090, m->scrdata);
+		}
+
 		// tooltips AND OUTLINE FOR THE BUTTONS (basically stuff when its selected)
 		
 		
@@ -643,45 +662,44 @@ void RenderToolbar(GlobalParams* m) {
 		
 
 		// fullscreen icon
-		POINT mp;
-		GetCursorPos(&mp);
-		ScreenToClient(m->hwnd, &mp);
-		bool nearf = false;
-		if ((mp.x > m->width - 36 && mp.x < m->width - 13) && (mp.y > 12 && mp.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
-			nearf = true;
-		}
-
-		if(nearf) {
-			//-- The outline for the fullscreen button
-			dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->width-36, 12, 24, 23, 0xFFFFFF, 0.2f);
-			dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->width-37, 11, 26, 25, 0x000000, 1.0f);
-
-			SwitchFont(m->Tahoma);
-			//-- Fullscreen icon tooltip
-			if (m->fullscreen) {
-				PlaceString(m, 13, "Exit Fullscreen (F11)", m->width - 120, 48, 0xFFFFFF, m->scrdata);
-			}
-			else {
-				PlaceString(m, 13, "Fullscreen (F11)", m->width - 100, 48, 0xFFFFFF, m->scrdata);
+		if (m->width > 535) {
+			POINT mp;
+			GetCursorPos(&mp);
+			ScreenToClient(m->hwnd, &mp);
+			bool nearf = false;
+			if ((mp.x > m->width - 36 && mp.x < m->width - 13) && (mp.y > 12 && mp.y < 33)) { //fullscreen icon location check coordinates (ALWAYS KEEP)
+				nearf = true;
 			}
 
-		}
+			if(nearf) {
+				//-- The outline for the fullscreen button
+				dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->width-36, 12, 24, 23, 0xFFFFFF, 0.2f);
+				dDrawRoundedRectangle(m->scrdata, m->width, m->height, m->width-37, 11, 26, 25, 0x000000, 1.0f);
 
-		for (int y = 0; y < 11; y++) {
-			for (int x = 0; x < 12; x++) {
-				uint32_t* oLoc = GetMemoryLocation(m->scrdata, m->width + x - 30, y + 18, m->width, m->height);
-				float t = 0.5f;
-				if (nearf) {
-					t = 1.0f;
+				SwitchFont(m->Tahoma);
+				//-- Fullscreen icon tooltip
+				if (m->fullscreen) {
+					PlaceString(m, 13, "Exit Fullscreen (F11)", m->width - 120, 48, 0xFFFFFF, m->scrdata);
 				}
-				float transparency = ((float)((*GetMemoryLocation(m->fullscreenIconData, x, y, 12, 11))&0xFF) / 255.0f)*t;
-				*oLoc = lerp(*oLoc, 0xFFFFFF, transparency);
+				else {
+					PlaceString(m, 13, "Fullscreen (F11)", m->width - 100, 48, 0xFFFFFF, m->scrdata);
+				}
+
+			}
+			for (int y = 0; y < 11; y++) {
+				for (int x = 0; x < 12; x++) {
+					uint32_t* oLoc = GetMemoryLocation(m->scrdata, m->width + x - 30, y + 18, m->width, m->height);
+					float t = 0.5f;
+					if (nearf) {
+						t = 1.0f;
+					}
+					float transparency = ((float)((*GetMemoryLocation(m->fullscreenIconData, x, y, 12, 11)) & 0xFF) / 255.0f) * t;
+					*oLoc = lerp(*oLoc, 0xFFFFFF, transparency);
+				}
 			}
 		}
+		
 
-		// version
-		SwitchFont(m->OCRAExt);
-		PlaceString(m, 13, REAL_BIG_VERSION_BOOLEAN, m->width - 72, 16, 0x909090, m->scrdata);
 }
 
 void RenderToolbarShadow(GlobalParams *m) {
@@ -1146,24 +1164,13 @@ void RedrawSurface(GlobalParams* m, bool onlyImage, bool doesManualClip) {
 
 	if (m->drawmode) {
 		SwitchFont(m->SegoeUI);
-		PlaceString(m, 12, "Draw Mode", 12, m->toolheight + 27, 0x000000, m->scrdata);
-		PlaceString(m, 12, "Draw Mode", 12, m->toolheight + 25, 0xFFFFFF, m->scrdata);
-		PlaceString(m, 10, "LEFT: Draw", 12, m->toolheight + 40, 0x808080, m->scrdata);
-		PlaceString(m, 10, "MIDDLE: Pan", 12, m->toolheight + 50, 0x808080, m->scrdata);
-		PlaceString(m, 10, "CTRL/RIGHT CLICK: Erase", 12, m->toolheight + 60, 0x808080, m->scrdata);
-		PlaceString(m, 10, "CTRL+SHIFT: Transparent", 12, m->toolheight + 70, 0x808080, m->scrdata);
-		PlaceString(m, 10, "SHIFT+Z: Eyedropper", 12, m->toolheight + 80, 0x808080, m->scrdata);
+		PlaceStringShadow(m, 12, "Draw Mode", 12, m->toolheight + 25, 0xFFFFFF, m->scrdata, 2);
+		PlaceStringShadow(m, 10, "LEFT: Draw", 12, m->toolheight + 40, 0xC0C0C0, m->scrdata, 1);
+		PlaceStringShadow(m, 10, "MIDDLE: Pan", 12, m->toolheight + 50, 0xC0C0C0, m->scrdata, 1);
+		PlaceStringShadow(m, 10, "CTRL/RIGHT CLICK: Erase", 12, m->toolheight + 60, 0xC0C0C0, m->scrdata, 1);
+		PlaceStringShadow(m, 10, "CTRL+SHIFT: Transparent", 12, m->toolheight + 70, 0xC0C0C0, m->scrdata, 1);
+		PlaceStringShadow(m, 10, "SHIFT+Z: Eyedropper", 12, m->toolheight + 80, 0xC0C0C0, m->scrdata, 1);
 	}
-
-
-	if (((GetKeyState(VK_CONTROL) & 0x8000) && (GetKeyState(VK_MENU) & 0x8000)) && (m->imgwidth >= 1)) {// TWINNING!
-		SwitchFont(m->SegoeUI);
-		PlaceString(m, 16, "CTRL + ALT: Keyboard Mode - Press any number to select the corresponding toolbar button", 12, m->toolheight + 13, 0x000000, m->scrdata);
-		PlaceString(m, 16, "CTRL + ALT: Keyboard Mode - Press any number to select the corresponding toolbar button", 12, m->toolheight + 11, 0xFFFFFF, m->scrdata);
-	}
-
-	
-	
 
 
 
@@ -1189,7 +1196,8 @@ void RedrawSurface(GlobalParams* m, bool onlyImage, bool doesManualClip) {
 	
 	 // FOR DEBUG
 	/*
-	* uint32_t randc = ((uint32_t)rand() << 16) | (uint32_t)rand();;
+	
+	uint32_t randc = ((uint32_t)rand() << 16) | (uint32_t)rand();;
 		for (int y = 0; y < m->height; y++) {
 			for (int x = 0; x < m->width; x++) {
 				uint32_t* memloc = GetMemoryLocation(m->scrdata, x, y, m->width, m->height);
@@ -1198,14 +1206,14 @@ void RedrawSurface(GlobalParams* m, bool onlyImage, bool doesManualClip) {
 		}
 	*/
 	
+	
 	if (m->tint || m->deletingtemporaryfiles) {
 		Tint(m);
 	}
 
 	if (m->loading) {
 		SwitchFont(m->SegoeUI);
-		PlaceString(m, 20, "Loading", 12, m->toolheight + 12, 0x000000, m->scrdata);
-		PlaceString(m, 20, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata);
+		PlaceStringShadow(m, 20, "Loading", 10, m->toolheight + 10, 0xFFFFFF, m->scrdata, 2, 2);
 	}
 
 	if (m->deletingtemporaryfiles) {
